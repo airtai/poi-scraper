@@ -11,7 +11,8 @@ from fastagency.runtimes.autogen.agents.websurfer import WebSurferAgent
 llm_config = {
     "config_list": [
         {
-            "model": "gpt-4o-mini",
+            # "model": "gpt-4o-mini",
+            "model": "gpt-4o",
             "api_key": os.getenv("OPENAI_API_KEY"),
         }
     ],
@@ -32,6 +33,7 @@ IMPORTANT:
 
 When calling `create_new_websurfing_task` always append the below in the `task` parameter. Never skip this rule or you will be penalised.
     
+    - You SHOULD always pass the website link as part of the task.
     - Never ever search the internet for gathering POI, You MUST always gather the POI's that are present only in the given website.
     - You should tag the POI's into one of the below categories:
         - Restaurants and Cafes: Places offering food and drinks, ranging from casual to fine dining.
