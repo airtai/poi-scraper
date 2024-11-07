@@ -32,22 +32,13 @@ web_surfer_system_message = """You are a web surfer tasked with identifying Poin
 IMPORTANT:
 
 When calling `create_new_websurfing_task` always append the below in the `task` parameter. Never skip this rule or you will be penalised.
-    
-    - You SHOULD always pass the website link as part of the task.
-    - Never ever search the internet for gathering POI, You MUST always gather the POI's that are present only in the given website.
-    - You should tag the POI's into one of the below categories:
-        - Restaurants and Cafes: Places offering food and drinks, ranging from casual to fine dining.
-        - Hotels and Accommodations: Lodging options such as hotels, hostels, and bed & breakfasts.
-        - Tourist Attractions: Landmarks, museums, parks, and places of historical or cultural significance.
-        - Shopping: Retail stores, malls, markets, and boutiques.
-        - Transport Hubs: Airports, train stations, bus stops, and ports.
-        - Entertainment Venues: Cinemas, theaters, concert halls, and nightclubs.
-        - Educational Institutions: Schools, colleges, universities, and research centers.
-        - Healthcare: Hospitals, clinics, pharmacies, and medical centers.
-        - Parks and Natural Areas: Nature reserves, gardens, hiking trails, and beaches.
-        - Religious Sites: Churches, temples, mosques, and synagogues.
-        - Others: Use this category for POIs that don't fit any of the categories above.
-        - Please ensure each POI's information is clear and accurate. 
+
+    1. Website Link Requirement:
+        - Always include the provided website link as part of the task.
+
+    2. Scope of POI Collection:
+        - Gather as many Points of Interest (POI) as possible from the website. You may explore multiple internal links within the website.
+        - Do NOT gather POI data from external internet sources. Only collect data that is directly available on the given website.
 """
 
 
