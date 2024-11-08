@@ -7,6 +7,7 @@ from fastagency import UI
 from fastagency.runtimes.autogen import AutoGenWorkflows
 
 from poi_scraper.custom_web_surfer import CustomWebSurferTool
+from poi_scraper.utils import get_all_unique_sub_urls
 
 system_message = """You are a web surfer agent tasked with identifying Points of Interest (POI) on a given webpage. 
 Your objective is to find and list all notable POIs where people can visit or hang out. 
@@ -37,6 +38,10 @@ wf = AutoGenWorkflows()
 def websurfer_workflow(
     ui: UI, params: dict[str, Any]
 ) -> str:
+
+    regitered_pois: dict[str, str] = {}
+    
+    summaries: list[str] = []
     
     def register_poi(
             name: Annotated[str, "The name of POI"], 
@@ -45,16 +50,19 @@ def websurfer_workflow(
             location: Annotated[Optional[str], "The location of the POI"] = None
             ) -> str:
         ui.text_message(sender="WebSurfer", recipient="POI Database", body=f"POI name: {name}, description: {description}, category: {category}, location: {location}")
+        regitered_pois[name] = {"description": description, "category": category, "location": location}
         return "POI registered"
     
-    url = ui.text_input(
+    webpage_url = ui.text_input(
         sender="Workflow",
         recipient="User",
         prompt="I can collect Points of Interest (POI) data from any webpage—just share the link with me!",
     )
 
-    initial_message = f"""Please collect all the Points of Interest (POI) data from this webpage: {url}."""
+    # First, collect all unique sub-links
+    all_unique_sub_urls = get_all_unique_sub_urls(webpage_url)
 
+    # Create agents and tools
     assistant_agent = AssistantAgent(
         name="Assistant_Agent",
         system_message="You are a helpful agent",
@@ -89,11 +97,26 @@ def websurfer_workflow(
         description="Register Point of Interest (POI)",
     )
 
-    chat_result = assistant_agent.initiate_chat(
-        web_surfer,
-        message=initial_message,
-        summary_method="reflection_with_llm",
-        max_turns=3,
-    )
+    for url in all_unique_sub_urls:
+        
+        def scrape_poi_data(url: str) -> str:
+            
+            initial_message = f"""Please collect all the Points of Interest (POI) data from this webpage: {url}."""
 
-    return chat_result.summary  # type: ignore[no-any-return]
+
+            chat_result = assistant_agent.initiate_chat(
+                web_surfer,
+                message=initial_message,
+                summary_method="reflection_with_llm",
+                max_turns=3,
+            )
+
+            return chat_result.summary
+
+        summaries.append(scrape_poi_data(url))    
+    
+    
+    ui.text_message(sender="Workflow", recipient="User", body=f"List of all POIs: \n {'\n'.join([f'{i+1}. {name}' for i, name in enumerate(regitered_pois.keys())])}")
+    
+    # Return combined summary of all processed links
+    return f"POI collection completed for {len(all_unique_sub_urls)} links.\n" + "\n".join(summaries)
