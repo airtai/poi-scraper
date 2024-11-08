@@ -7,7 +7,7 @@ from fastagency import UI
 from fastagency.runtimes.autogen import AutoGenWorkflows
 
 from poi_scraper.custom_web_surfer import CustomWebSurferTool
-from poi_scraper.utils import get_all_unique_sub_urls
+from poi_scraper.utils import get_all_unique_sub_urls, is_valid_url
 
 system_message = """You are a web surfer agent tasked with identifying Points of Interest (POI) on a given webpage. 
 Your objective is to find and list all notable POIs where people can visit or hang out. 
@@ -53,13 +53,24 @@ def websurfer_workflow(
         regitered_pois[name] = {"description": description, "category": category, "location": location}
         return "POI registered"
     
-    webpage_url = ui.text_input(
-        sender="Workflow",
-        recipient="User",
-        prompt="I can collect Points of Interest (POI) data from any webpage—just share the link with me!",
-    )
+    while True:
+    
+        webpage_url = ui.text_input(
+            sender="Workflow",
+            recipient="User",
+            prompt="I can collect Points of Interest (POI) data from any webpage—just share the link with me!",
+        )
 
-    # First, collect all unique sub-links
+        if is_valid_url(webpage_url):
+            break
+        else:
+            ui.text_message(
+                sender="Workflow",
+                recipient="User",
+                body="The provided URL is not valid. Please enter a valid URL.",
+            )
+    
+    # Collect all unique sub-links
     all_unique_sub_urls = get_all_unique_sub_urls(webpage_url)
 
     # Create agents and tools
@@ -116,7 +127,7 @@ def websurfer_workflow(
         summaries.append(scrape_poi_data(url))    
     
     
-    ui.text_message(sender="Workflow", recipient="User", body=f"List of all POIs: \n {'\n'.join([f'{i+1}. {name}' for i, name in enumerate(regitered_pois.keys())])}")
+    ui.text_message(sender="Workflow", recipient="User", body=f"List of all POIs: \n {', '.join([f'{i+1}. {name}' for i, name in enumerate(regitered_pois.keys())])}")
     
     # Return combined summary of all processed links
     return f"POI collection completed for {len(all_unique_sub_urls)} links.\n" + "\n".join(summaries)

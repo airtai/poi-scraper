@@ -1,5 +1,11 @@
-def validate_url(webpage_url: str) -> bool:
-    return True
+from urllib.parse import urlparse
+
+def is_valid_url(url):
+    try:
+        result = urlparse(url)
+        return all([result.scheme, result.netloc])
+    except:
+        return False
 
 
 def get_all_unique_sub_urls(webpage_url: str) -> str:
