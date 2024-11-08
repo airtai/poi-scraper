@@ -8,7 +8,7 @@ from fastagency.runtimes.autogen import AutoGenWorkflows
 
 from poi_scraper.custom_web_surfer import CustomWebSurferTool
 from poi_scraper.utils import get_all_unique_sub_urls, is_valid_url, generate_poi_markdown_table
-from poi_scraper.poi_validator import PoiVaidator
+from poi_scraper.poi_validator import PoiDataBase
 
 system_message = """You are a web surfer agent tasked with identifying Points of Interest (POI) on a given webpage. 
 Your objective is to find and list all notable POIs where people can visit or hang out. 
@@ -17,8 +17,8 @@ Instructions:
 
     - Scrape only the given webpage to identify POIs (do not explore any child pages or external links).
     - ALWAYS visit the full webpage before collecting POIs.
-    - NEVER call `register_poi` without visiting the full webpage. This is a very important instruction and you will be penalised if you do so.
-    - After visiting the webpage and identifying the POIs, you MUST call the `register_poi` function to record the POI.
+    - NEVER call `register_poi_data` without visiting the full webpage. This is a very important instruction and you will be penalised if you do so.
+    - After visiting the webpage and identifying the POIs, you MUST call the `register_poi_data` function to record the POI.
 
 Ensure that you strictly follow these instructions to capture accurate POI data."""
 
@@ -40,31 +40,22 @@ def websurfer_workflow(
     ui: UI, params: dict[str, Any]
 ) -> str:
 
-    registered_pois: dict[str, str] = {}
-    un_registered_pois: dict[str, str] = {}
     summaries: list[str] = []
     
-    def register_poi(
+    poi_data = PoiDataBase(llm_config, ui)
+    
+    def register_poi_data(
             name: Annotated[str, "The name of POI"], 
             description: Annotated[str, "The descrption of POI"], 
             category: Annotated[str, "The category of the POI"],
-            location: Annotated[Optional[str], "The location of the POI"] = None
+            location: Annotated[Optional[str], "The location of the POI"] = None,
+            # todo: url: Annotated[str, "The URL of the POI"] = None
         ) -> str:
         
-        poi_validator = PoiVaidator(llm_config)
-        result = poi_validator.validate(name, description)
-
-        if result.is_valid:
-            registered_pois[name] = {"description": description, "category": category, "location": location}
-            ui.text_message(sender="WebSurfer", recipient="POI Database", body=f"POI registered. name: {name}, description: {description}, category: {category}, location: {location}")
-            return "POI registered"
-        else:
-            un_registered_pois[name] = {"description": description, "category": category, "location": location}
-        
-        ui.text_message(sender="WebSurfer", recipient="POI Database", body=f"POI not registered. name: {name}, description: {description}, category: {category}, location: {location}")
-        return "POI not registered"
+        return poi_data.register(name, description, category, location)
     
     # Get valid URL from user
+    # todo: get_url_from_user(ui)
     while True:
         webpage_url = ui.text_input(
             sender="Workflow",
@@ -78,9 +69,21 @@ def websurfer_workflow(
             recipient="User",
             body="The provided URL is not valid. Please enter a valid URL. Example: https://www.example.com",
         )
+
+    ui.text_message(
+        sender="Workflow",
+        recipient="User",
+        body=f"Please wait. I am collecting all the sub-links from {webpage_url}",
+    )
     
     # Collect all unique sub-links
+    # todo: pass ui object to get_all_unique_sub_urls
     all_unique_sub_urls = get_all_unique_sub_urls(webpage_url)
+    print("*" * 100)
+    print(f"{all_unique_sub_urls=}")
+    print("*" * 100)
+
+    all_unique_sub_urls = list(all_unique_sub_urls)[:5]
 
     # Create agents and tools
     assistant_agent = AssistantAgent(
@@ -110,31 +113,30 @@ def websurfer_workflow(
     )
 
     register_function(
-        register_poi,
+        register_poi_data,
         caller=web_surfer,
         executor=assistant_agent,
-        name="register_poi",
+        name="register_poi_data",
         description="Register Point of Interest (POI)",
     )
 
+    def scrape_poi_data(url: str) -> str:
+        initial_message = f"""Please collect all the Points of Interest (POI) data from this webpage: {url}."""
+        chat_result = assistant_agent.initiate_chat(
+            web_surfer,
+            message=initial_message,
+            summary_method="reflection_with_llm",
+            max_turns=3,
+        )
+        return chat_result.summary
+    
     for url in all_unique_sub_urls:
-        
-        def scrape_poi_data(url: str) -> str:
-            initial_message = f"""Please collect all the Points of Interest (POI) data from this webpage: {url}."""
-            chat_result = assistant_agent.initiate_chat(
-                web_surfer,
-                message=initial_message,
-                summary_method="reflection_with_llm",
-                max_turns=3,
-            )
-            return chat_result.summary
-
         summaries.append(scrape_poi_data(url))
 
-    table = generate_poi_markdown_table(registered_pois)
+    table = generate_poi_markdown_table(poi_data.registered_pois)
     ui.text_message(sender="Workflow", recipient="User", body=f"List of all registered POIs:\n{table}")
 
-    table = generate_poi_markdown_table(un_registered_pois)
+    table = generate_poi_markdown_table(poi_data.un_registered_pois)
     ui.text_message(sender="Workflow", recipient="User", body=f"List of all unregistered POIs:\n{table}")
     
     # Return combined summary of all processed links

@@ -4,16 +4,18 @@ from typing import Any
 
 from autogen import AssistantAgent, UserProxyAgent
 
+from fastagency import UI
+
 @dataclass
-class POIValidationResult:
+class PoiValidationResult:
     """Result of POI validation"""
     is_valid: bool
     name: str
     description: str
     raw_response: str
 
-class PoiVaidator:
-    """Class for validating Points of Interest (POI)"""
+class PoiDataBase:
+    """Class for storing the Points of Interest (POI)"""
 
     SYSTEM_MESSAGE = """You are a helpful agent. Your task is to determine if a given name qualifies as a Point of Interest (POI).
 
@@ -46,7 +48,7 @@ class PoiVaidator:
         - Your response: "No"
     """
 
-    def __init__(self, llm_config: dict[str, Any]):
+    def __init__(self, llm_config: dict[str, Any], ui: UI):
         """
         Initialize POI validator with optional custom configuration
         
@@ -54,8 +56,12 @@ class PoiVaidator:
             agent_config: Optional custom configuration for the validator agent
         """
         self.llm_config = llm_config
+        self.ui = ui
         self._validator_agent = None
         self._user_proxy = None
+        self.registered_pois: dict[str, str] = {}
+        self.un_registered_pois: dict[str, str] = {}
+
 
     @property
     def validator_agent(self) -> AssistantAgent:
@@ -63,7 +69,7 @@ class PoiVaidator:
         if self._validator_agent is None:
             self._validator_agent = AssistantAgent(
                 name="POI_Validator_Agent",
-                system_message=PoiVaidator.SYSTEM_MESSAGE,
+                system_message=PoiDataBase.SYSTEM_MESSAGE,
                 llm_config=self.llm_config,
                 human_input_mode="NEVER"
             )
@@ -81,7 +87,7 @@ class PoiVaidator:
         return self._user_proxy
 
 
-    def validate(self, name: str, description: str) -> str:
+    def register(self, name: str, description: str, category: str, location: str) -> str:
         initial_message = f"""Please confirm if the below is a Point of Interest (POI). 
 
 - name:  {name}
@@ -97,9 +103,19 @@ class PoiVaidator:
         messages = [msg["content"] for msg in chat_result.chat_history]
         last_message = messages[-1]
         
-        return POIValidationResult(
+        result = PoiValidationResult(
             is_valid=last_message.lower() == "yes",
             name=name,
             description=description,
             raw_response=last_message
         )
+
+        if result.is_valid:
+            self.registered_pois[name] = {"description": description, "category": category, "location": location}
+            self.ui.text_message(sender="WebSurfer", recipient="POI Database", body=f"POI registered. name: {name}, description: {description}, category: {category}, location: {location}")
+            return "POI registered"
+        else:
+            self.un_registered_pois[name] = {"description": description, "category": category, "location": location}
+        
+        self.ui.text_message(sender="WebSurfer", recipient="POI Database", body=f"POI not registered. name: {name}, description: {description}, category: {category}, location: {location}")
+        return "POI not registered"
