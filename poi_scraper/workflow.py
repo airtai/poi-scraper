@@ -17,6 +17,8 @@ Instructions:
     - ALWAYS visit the full webpage before collecting POIs.
     - NEVER call `register_poi` without visiting the full webpage. This is a very important instruction and you will be penalised if you do so.
     - After visiting the webpage and identifying the POIs, you MUST call the `register_poi` function to record the POI.
+    - Use continue_websurfing_task_with_additional_instructions at least 2 times after receiving the first response. Use message:
+        "Please try to find more POIs, each subpage might have a few more!"
 
 Ensure that you strictly follow these instructions to capture accurate POI data."""
 
@@ -93,7 +95,7 @@ def websurfer_workflow(
         web_surfer,
         message=initial_message,
         summary_method="reflection_with_llm",
-        max_turns=3,
+        max_turns=7,
     )
 
     return chat_result.summary  # type: ignore[no-any-return]

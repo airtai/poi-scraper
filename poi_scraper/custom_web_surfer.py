@@ -42,8 +42,9 @@ class CustomWebSurferTool(WebSurferTool):
 web_surfer is able to CLICK on links, SCROLL down, and scrape the content of the web page. e.g. you cen tell him: "Click the 'Getting Started' result".
 Each time you receive a reply from web_surfer, you need to tell him what to do next. e.g. "Click the TV link" or "Scroll down".
 
-You need to guide the web_surfer agent to gather Points of Interest (POIs) on a given webpage. Instruct the web_surfer to visit the 
+You need to guide the web_surfer agent to gather Points of Interest (POIs) on a given webpage and ALL relevant subpages. Instruct the web_surfer to visit the 
 specified page and scroll down until the very end to view the full content.
+Also, do the same for ALL relevant subpages.
 
 Follow the below instructions for collecting the POI's:
 
@@ -69,6 +70,7 @@ Examples:
 "Click the "given webpage" - This way you will navigate to the given webpage and you will find more information about the POIs.
 "Scroll down" - this will get you more information about the POIs on the page.
 "Register the POI" - this will get you the POI information from the page.
+- repeat the proces for all relevant subpages
 
 
 FINAL MESSAGE:
