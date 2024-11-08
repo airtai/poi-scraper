@@ -132,7 +132,7 @@ def websurfer_workflow(
         summaries.append(scrape_poi_data(url))
 
     table = generate_poi_markdown_table(registered_pois)
-    ui.text_message(sender="Workflow", recipient="User", body=f"List of all POIs:\n{table}")
+    ui.text_message(sender="Workflow", recipient="User", body=f"List of all registered POIs:\n{table}")
 
     table = generate_poi_markdown_table(un_registered_pois)
     ui.text_message(sender="Workflow", recipient="User", body=f"List of all unregistered POIs:\n{table}")
