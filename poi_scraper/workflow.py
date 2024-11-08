@@ -7,7 +7,7 @@ from fastagency import UI
 from fastagency.runtimes.autogen import AutoGenWorkflows
 
 from poi_scraper.custom_web_surfer import CustomWebSurferTool
-from poi_scraper.utils import get_all_unique_sub_urls, is_valid_url
+from poi_scraper.utils import get_all_unique_sub_urls, is_valid_url, generate_poi_markdown_table
 
 system_message = """You are a web surfer agent tasked with identifying Points of Interest (POI) on a given webpage. 
 Your objective is to find and list all notable POIs where people can visit or hang out. 
@@ -39,7 +39,7 @@ def websurfer_workflow(
     ui: UI, params: dict[str, Any]
 ) -> str:
 
-    regitered_pois: dict[str, str] = {}
+    registered_pois: dict[str, str] = {}
     
     summaries: list[str] = []
     
@@ -50,7 +50,7 @@ def websurfer_workflow(
             location: Annotated[Optional[str], "The location of the POI"] = None
             ) -> str:
         ui.text_message(sender="WebSurfer", recipient="POI Database", body=f"POI name: {name}, description: {description}, category: {category}, location: {location}")
-        regitered_pois[name] = {"description": description, "category": category, "location": location}
+        registered_pois[name] = {"description": description, "category": category, "location": location}
         return "POI registered"
     
     while True:
@@ -127,7 +127,10 @@ def websurfer_workflow(
         summaries.append(scrape_poi_data(url))    
     
     
-    ui.text_message(sender="Workflow", recipient="User", body=f"List of all POIs: \n {', '.join([f'{i+1}. {name}' for i, name in enumerate(regitered_pois.keys())])}")
+    
+    
+    table = generate_poi_markdown_table(registered_pois)
+    ui.text_message(sender="Workflow", recipient="User", body=f"List of all POIs:\n{table}")
     
     # Return combined summary of all processed links
     return f"POI collection completed for {len(all_unique_sub_urls)} links.\n" + "\n".join(summaries)
