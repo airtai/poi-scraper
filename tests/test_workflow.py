@@ -7,7 +7,7 @@ from poi_scraper.workflow import wf
 from tests.conftest import InputMock
 
 
-def test_workflow(monkeypatch: pytest.MonkeyPatch):
+def test_workflow(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("builtins.input", InputMock([""] * 5))
 
     result = wf.run(

@@ -1,7 +1,6 @@
 from typing import Annotated, Any, Optional
 
 from autogen.agentchat.chat import ChatResult
-
 from fastagency.runtimes.autogen.tools import WebSurferTool
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -25,24 +24,31 @@ class CustomWebSurferAnswer(BaseModel):
         return CustomWebSurferAnswer(
             task="Collect Points of Interest data from the webpage https://www.kayak.co.in/Chennai.13827.guide",
             is_successful=True,
-            poi_details="Below are the list of all the POIs found in the webpage: \n\n1. Name: Marina Beach, Location: Chennai\n2. Name: Kapaleeshwarar Temple, Location: Chennai\n3. Name: Arignar Anna Zoological Park, Location: Chennai\n4. Name: Guindy National Park, Location: Chennai\n5. Name: Government Museum, Location: Chennai\n6. Name: Valluvar Kottam, Location: Chennai\n7. Name: Fort St. George, Location: Chennai\n8. Name: San Thome Church, Location: Chennai\n9. Name: Elliot\'s Beach, Location: Chennai\n10. Name: Semmozhi Poonga, Location: Chennai",
+            poi_details="Below are the list of all the POIs found in the webpage: \n\n1. Name: Marina Beach, Location: Chennai\n2. Name: Kapaleeshwarar Temple, Location: Chennai\n3. Name: Arignar Anna Zoological Park, Location: Chennai\n4. Name: Guindy National Park, Location: Chennai\n5. Name: Government Museum, Location: Chennai\n6. Name: Valluvar Kottam, Location: Chennai\n7. Name: Fort St. George, Location: Chennai\n8. Name: San Thome Church, Location: Chennai\n9. Name: Elliot's Beach, Location: Chennai\n10. Name: Semmozhi Poonga, Location: Chennai",
             visited_links=[
                 "https://www.kayak.co.in/Chennai.13827.guide",
             ],
         )
 
 
-class CustomWebSurferTool(WebSurferTool):
-    def __init__(self, *args, **kwargs):
+class CustomWebSurferTool(WebSurferTool):  # type: ignore[misc]
+    def __init__(self, *args: Any, **kwargs: Any):
+        """Initialize the CustomWebSurferTool with the given arguments.
+
+        Args:
+            *args: Variable length argument list.
+            **kwargs: Arbitrary keyword arguments.
+        """
         super().__init__(*args, **kwargs)
 
     @property
     def system_message(self) -> str:
-        return """You are in charge of navigating the web_surfer agent to scrape the web.
+        return (
+            """You are in charge of navigating the web_surfer agent to scrape the web.
 web_surfer is able to CLICK on links, SCROLL down, and scrape the content of the web page. e.g. you cen tell him: "Click the 'Getting Started' result".
 Each time you receive a reply from web_surfer, you need to tell him what to do next. e.g. "Click the TV link" or "Scroll down".
 
-You need to guide the web_surfer agent to gather Points of Interest (POIs) on a given webpage. Instruct the web_surfer to visit the 
+You need to guide the web_surfer agent to gather Points of Interest (POIs) on a given webpage. Instruct the web_surfer to visit the
 specified page and scroll down until the very end to view the full content.
 
 Follow the below instructions for collecting the POI's:
@@ -75,7 +81,8 @@ FINAL MESSAGE:
 - Once you have retrieved all the POI's from the webpage and created the summary, you need to send the JSON-encoded summary to the web_surfer.
 - You MUST not include any other text or formatting in the message, only JSON-encoded summary!
 
-""" + f"""An example of the JSON-encoded summary:
+"""
+            + f"""An example of the JSON-encoded summary:
 {self.example_answer.model_dump_json()}
 
 TERMINATION:
@@ -85,10 +92,43 @@ OFTEN MISTAKES:
 - Enclosing JSON-encoded answer in any other text or formatting including '```json' ... '```' or similar!
 - Considering the category names like "Explore Chennai", "Things to do in Chennai", "Places to visit in Chennai" etc. as POIs. The POI's are the specific names like "Marina Beach", "Kapaleeshwarar Temple", "Arignar Anna Zoological Park" etc.
 """
+        )
 
     @property
     def initial_message(self) -> str:
         return f"""We are tasked with the following task: {self.task}"""
+
+    @property
+    def error_message(self) -> str:
+        return f"""Please output the JSON-encoded answer only in the following message before trying to terminate the chat.
+
+IMPORTANT:
+  - NEVER enclose JSON-encoded answer in any other text or formatting including '```json' ... '```' or similar!
+  - NEVER write TERMINATE in the same message as the JSON-encoded answer!
+
+EXAMPLE:
+
+{self.example_answer.model_dump_json()}
+
+NEGATIVE EXAMPLES:
+
+1. Do NOT include 'TERMINATE' in the same message as the JSON-encoded answer!
+
+{self.example_answer.model_dump_json()}
+
+TERMINATE
+
+2. Do NOT include triple backticks or similar!
+
+```json
+{self.example_answer.model_dump_json()}
+```
+
+THE LAST ERROR MESSAGE:
+
+{self.last_is_termination_msg_error}
+
+"""
 
     def is_termination_msg(self, msg: dict[str, Any]) -> bool:
         # print(f"is_termination_msg({msg=})")
@@ -104,7 +144,7 @@ OFTEN MISTAKES:
         except Exception as e:
             self.last_is_termination_msg_error = str(e)
             return False
-        
+
     def _get_error_message(self, chat_result: ChatResult) -> Optional[str]:
         messages = [msg["content"] for msg in chat_result.chat_history]
         last_message = messages[-1]
@@ -143,12 +183,12 @@ OFTEN MISTAKES:
         answer = CustomWebSurferAnswer(
             task=task,
             is_successful=False,
-            poi_details=f"unexpected error occurred: {str(e)}",
+            poi_details=f"unexpected error occurred: {e!s}",
             visited_links=[],
         )
 
         return self.create_final_reply(task, answer)
-    
+
     def create_final_reply(self, task: str, message: CustomWebSurferAnswer) -> str:
         retval = (
             "We have successfully completed the task:\n\n"
@@ -162,7 +202,7 @@ OFTEN MISTAKES:
             retval += f"  - {link}\n"
 
         return retval
-    
+
     @property
     def example_answer(self) -> CustomWebSurferAnswer:
         return CustomWebSurferAnswer.get_example_answer()

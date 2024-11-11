@@ -1,21 +1,29 @@
 from dataclasses import dataclass
-import os
-from typing import Any
+from typing import Any, Optional, Union
 
 from autogen import AssistantAgent, UserProxyAgent
-
 from fastagency import UI
+
 
 @dataclass
 class PoiValidationResult:
-    """Result of POI validation"""
+    """A class to represent the result of a POI (Point of Interest) validation.
+
+    Attributes:
+        is_valid (bool): Indicates whether the POI is valid.
+        name (str): The name of the POI.
+        description (str): The description of the POI.
+        raw_response (str): The raw response from the validation process.
+    """
+
     is_valid: bool
     name: str
     description: str
     raw_response: str
 
+
 class PoiDataBase:
-    """Class for storing the Points of Interest (POI)"""
+    """Class for storing the Points of Interest (POI)."""
 
     SYSTEM_MESSAGE = """You are a helpful agent. Your task is to determine if a given name qualifies as a Point of Interest (POI).
 
@@ -46,12 +54,11 @@ class PoiDataBase:
 
         - name: "Treks in Chennai", description: "Discover the best trekking spots in Chennai."
         - Your response: "No"
-    """
+"""
 
     def __init__(self, llm_config: dict[str, Any], ui: UI):
-        """
-        Initialize POI validator with optional custom configuration
-        
+        """Initialize POI validator with optional custom configuration
+
         Args:
             agent_config: Optional custom configuration for the validator agent
         """
@@ -59,36 +66,36 @@ class PoiDataBase:
         self.ui = ui
         self._validator_agent = None
         self._user_proxy = None
-        self.registered_pois: dict[str, str] = {}
-        self.un_registered_pois: dict[str, str] = {}
-
+        self.registered_pois: dict[str, dict[str, Union[str, Optional[str]]]] = {}
+        self.un_registered_pois: dict[str, dict[str, Union[str, Optional[str]]]] = {}
 
     @property
     def validator_agent(self) -> AssistantAgent:
-        """Lazy initialization of validator agent"""
+        """Lazy initialization of validator agent."""
         if self._validator_agent is None:
             self._validator_agent = AssistantAgent(
                 name="POI_Validator_Agent",
                 system_message=PoiDataBase.SYSTEM_MESSAGE,
                 llm_config=self.llm_config,
-                human_input_mode="NEVER"
+                human_input_mode="NEVER",
             )
         return self._validator_agent
-    
+
     @property
     def user_proxy(self) -> UserProxyAgent:
-        """Lazy initialization of user proxy agent"""
+        """Lazy initialization of user proxy agent."""
         if self._user_proxy is None:
             self._user_proxy = UserProxyAgent(
                 name="Poi_User_Proxy_Agent",
                 system_message="You are a helpful agent",
-                llm_config=self.llm_config
+                llm_config=self.llm_config,
             )
         return self._user_proxy
 
-
-    def register(self, name: str, description: str, category: str, location: str) -> str:
-        initial_message = f"""Please confirm if the below is a Point of Interest (POI). 
+    def register(
+        self, name: str, description: str, category: str, location: Optional[str]
+    ) -> str:
+        initial_message = f"""Please confirm if the below is a Point of Interest (POI).
 
 - name:  {name}
 - description: {description}
@@ -99,23 +106,39 @@ class PoiDataBase:
             summary_method="reflection_with_llm",
             max_turns=1,
         )
-        
+
         messages = [msg["content"] for msg in chat_result.chat_history]
         last_message = messages[-1]
-        
+
         result = PoiValidationResult(
             is_valid=last_message.lower() == "yes",
             name=name,
             description=description,
-            raw_response=last_message
+            raw_response=last_message,
         )
 
         if result.is_valid:
-            self.registered_pois[name] = {"description": description, "category": category, "location": location}
-            self.ui.text_message(sender="WebSurfer", recipient="POI Database", body=f"POI registered. name: {name}, description: {description}, category: {category}, location: {location}")
+            self.registered_pois[name] = {
+                "description": description,
+                "category": category,
+                "location": location,
+            }
+            self.ui.text_message(
+                sender="WebSurfer",
+                recipient="POI Database",
+                body=f"POI registered. name: {name}, description: {description}, category: {category}, location: {location}",
+            )
             return "POI registered"
         else:
-            self.un_registered_pois[name] = {"description": description, "category": category, "location": location}
-        
-        self.ui.text_message(sender="WebSurfer", recipient="POI Database", body=f"POI not registered. name: {name}, description: {description}, category: {category}, location: {location}")
+            self.un_registered_pois[name] = {
+                "description": description,
+                "category": category,
+                "location": location,
+            }
+
+        self.ui.text_message(
+            sender="WebSurfer",
+            recipient="POI Database",
+            body=f"POI not registered. name: {name}, description: {description}, category: {category}, location: {location}",
+        )
         return "POI not registered"
