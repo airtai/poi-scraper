@@ -17,6 +17,7 @@ jobs:
       fail-fast: false
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment: testing
 
     steps:
       - uses: actions/checkout@v4
@@ -47,4 +48,5 @@ jobs:
         run: pytest
         env:
           CONTEXT: ${{ runner.os }}-py${{ matrix.python-version }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
