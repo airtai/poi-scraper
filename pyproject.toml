@@ -12,12 +12,22 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+lint = [
+    "mypy==1.12.1",
+    "ruff==0.7.2",
+    "bandit==1.7.10",
+    "semgrep==1.95.0",
+]
 testing = [
     "pytest==8.3.3",
     "pytest-asyncio==0.24.0",
 ]
 
-dev = ["poi_scraper[testing]"]
+dev = [
+    "poi_scraper[testing,lint]",
+    "pre-commit==4.0.1",
+    "detect-secrets==1.5.0",
+]
 
 [tool.hatch.build.targets.wheel]
 only-include = ["poi_scraper"]
