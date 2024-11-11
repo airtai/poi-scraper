@@ -79,9 +79,6 @@ def websurfer_workflow(
     # Collect all unique sub-links
     # todo: pass ui object to get_all_unique_sub_urls
     all_unique_sub_urls = get_all_unique_sub_urls(webpage_url)
-    print("*" * 100)
-    print(f"{all_unique_sub_urls=}")
-    print("*" * 100)
 
     all_unique_sub_urls = list(all_unique_sub_urls)[:5]
 
