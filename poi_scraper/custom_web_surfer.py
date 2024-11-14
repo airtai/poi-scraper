@@ -22,9 +22,9 @@ class CustomWebSurferAnswer(BaseModel):
     @staticmethod
     def get_example_answer() -> "CustomWebSurferAnswer":
         return CustomWebSurferAnswer(
-            task="Collect Points of Interest data from the webpage https://www.kayak.co.in/Chennai.13827.guide",
+            task="Collect Points of Interest data and links with score from the webpage https://www.kayak.co.in/Chennai.13827.guide",
             is_successful=True,
-            poi_details="Below are the list of all the POIs found in the webpage: \n\n1. Name: Marina Beach, Location: Chennai\n2. Name: Kapaleeshwarar Temple, Location: Chennai\n3. Name: Arignar Anna Zoological Park, Location: Chennai\n4. Name: Guindy National Park, Location: Chennai\n5. Name: Government Museum, Location: Chennai\n6. Name: Valluvar Kottam, Location: Chennai\n7. Name: Fort St. George, Location: Chennai\n8. Name: San Thome Church, Location: Chennai\n9. Name: Elliot's Beach, Location: Chennai\n10. Name: Semmozhi Poonga, Location: Chennai",
+            poi_details="Below are the list of all the POIs found in the webpage: \n\n1. Name: Marina Beach, Location: Chennai\n2. Name: Kapaleeshwarar Temple, Location: Chennai\n3. Name: Arignar Anna Zoological Park, Location: Chennai\n4. Name: Guindy National Park. Below are the list of all links found in the webpage: 1. link: https://www.kayak.co.in/Chennai.13827.guide/activities, score: 0.75\n2. link: https://www.kayak.co.in/Chennai.13827.guide/contact-us, score: 0.0\n5. link: https://www.kayak.co.in/Chennai.13827.guide/places, score: 1.0\n\n",
             visited_links=[
                 "https://www.kayak.co.in/Chennai.13827.guide",
             ],
@@ -51,12 +51,28 @@ Each time you receive a reply from web_surfer, you need to tell him what to do n
 You need to guide the web_surfer agent to gather Points of Interest (POIs) on a given webpage. Instruct the web_surfer to visit the
 specified page and scroll down until the very end to view the full content.
 
-Follow the below instructions for collecting the POI's:
+Guiding Examples:
+    - "Click the "given webpage" - This way you will navigate to the given webpage and you will find more information about the POIs.
+    - "Scroll down" - this will get you more information about the POIs on the page.
+    - "Register the POI" - this will get you the POI information from the page.
+    - "Register new link" - this will get you the new link information from the page.
 
-INSTRUCTIONS:
+
+For a given page your objective is to:
+    - Collect as many POIs as possible from the given webpage.
+    - Return a list of links available on that page along with a score for each link. The score be in the range of 0 to 1. The score should be based on the likelihood that the link will lead to more POIs collections.
+
+Follow the below instructions for collecting the POI's and new links from the webpage:
+
+GENERAL INSTRUCTIONS:
 - You MUST visit the full webpage. This is non-negotiable and you will be penalized if you do not do so.
 - As you scroll the webpage, collect as much POI's as possible from the given webpage.
 - Do not click on any links or navigate to other pages. Focus solely on the current page.
+- Create a summary after you have collected all the POI's from the webpage.  The summary must be in English!
+- If you get some 40x error, please do NOT give up immediately, but try again on the same page. Give up only if you get 40x error after multiple attempts.
+
+
+POI COLLECTION INSTRUCTIONS:
 - If the webpage has POI information, then encode the POI name, location, category and description as a JSON string. For example:
     {
         "name":"Marina Beach",
@@ -66,19 +82,30 @@ INSTRUCTIONS:
     }
 - Sometimes the webpages will have the category names like "Explore Chennai", "Things to do in Chennai", "Places to visit in Chennai" etc. You SHOULD NOT consider these as POIs. The POI's are the specific names like "Marina Beach", "Kapaleeshwarar Temple", "Arignar Anna Zoological Park" etc. NEVER EVER break this rule.
 - If there is no POI infomation in the given page then return "The page does not contain any POI information".
-- Finally summarize the findings for the given task. The summary must be in English!
-- Create a summary after you have collected all the POI's from the webpage.
-- If you get some 40x error, please do NOT give up immediately, but try again on the same page. Give up only if you get 40x error after multiple attempts.
 
+NEW LINK COLLECTION INSTRUCTIONS:
+    - For each link on the page, assign a score between 0 and 1 based on the context of the link. The score should be based on the likelihood that the link will lead to more POIs.
+    - If the link is likely to lead to more POIs, assign a score closer to 1. If the link is unlikely to lead to more POIs, assign a score closer to 0.
+    - If the url contains information about activities or broad categories where people can visit or gather such as tourist attractions, landmarks, parks, museums, cultural venues, and historic sites then assign a score closer to 1.0.
+    - If the url contains information about contact-us, transport, about-us, privacy-policy, terms-and-conditions, etc. then assign a score closer to 0.0.
+    - For each link you MUST call `register_new_link` function to record the link along with the score (0.0 to 1.0) indicating the relevance of the link to the POIs. This is a very important instruction and you will be penalised if you do not do so.
 
-Examples:
-"Click the "given webpage" - This way you will navigate to the given webpage and you will find more information about the POIs.
-"Scroll down" - this will get you more information about the POIs on the page.
-"Register the POI" - this will get you the POI information from the page.
+    - Few examples of the links with score:
+        - link: https://www.kayak.co.in/Chennai.13827.guide/places, score: 1.0
+        - link: https://www.kayak.co.in/Chennai.13827.guide/activities, score: 1.0
+        - link: https://www.kayak.co.in/Chennai.13827.guide/hotels/Taj-Coromandel, score: 1.0
+        - link: https://www.kayak.co.in/Chennai.13827.guide/nightlife, score: 1.0
+        - link: https://www.kayak.co.in/Chennai.13827.guide/food, score: 0.75
+        - link: https://www.kayak.co.in/Chennai.13827.guide/contact-us, score: 0.0
+        - link: https://www.kayak.co.in/Chennai.13827.guide/transport, score: 0.5
+        - link: https://www.kayak.co.in/Chennai.13827.guide/contact-us, score: 0.0
+        - link: https://www.kayak.co.in/Chennai.13827.guide/about-us, score: 0.0
+        - link: https://www.kayak.co.in/Chennai.13827.guide/privacy-policy, score: 0.0
+        - link: https://www.kayak.co.in/Chennai.13827.guide/faq, score: 0.0
 
 
 FINAL MESSAGE:
-- Once you have retrieved all the POI's from the webpage and created the summary, you need to send the JSON-encoded summary to the web_surfer.
+- Once you have retrieved all the POI's from the webpage, all links with score and created the summary, you need to send the JSON-encoded summary to the web_surfer.
 - You MUST not include any other text or formatting in the message, only JSON-encoded summary!
 
 """

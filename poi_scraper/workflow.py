@@ -6,7 +6,6 @@ from fastagency import UI
 from fastagency.runtimes.autogen import AutoGenWorkflows
 
 from poi_scraper.custom_web_surfer import CustomWebSurferTool
-from poi_scraper.get_links import get_recursive_subpages
 from poi_scraper.poi_validator import PoiDataBase
 from poi_scraper.utils import generate_poi_markdown_table, is_valid_url
 
@@ -17,16 +16,17 @@ Instructions:
 
     - Scrape only the given webpage to identify POIs (do not explore any child pages or external links).
     - ALWAYS visit the full webpage before collecting POIs.
-    - NEVER call `register_poi_data` without visiting the full webpage. This is a very important instruction and you will be penalised if you do so.
+    - NEVER call `register_poi_data` and `register_new_link` without visiting the full webpage. This is a very important instruction and you will be penalised if you do so.
     - After visiting the webpage and identifying the POIs, you MUST call the `register_poi_data` function to record the POI.
+    - If you find any new links on the webpage, you can call the `register_new_link` function to record the link along with the score (0.0 to 1.0) indicating the relevance of the link to the POIs.
 
 Ensure that you strictly follow these instructions to capture accurate POI data."""
 
 llm_config = {
     "config_list": [
         {
-            # "model": "gpt-4o-mini",
-            "model": "gpt-4o",
+            "model": "gpt-4o-mini",
+            # "model": "gpt-4o",
             "api_key": os.getenv("OPENAI_API_KEY"),
         }
     ],
@@ -41,6 +41,7 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
     summaries: list[str] = []
 
     poi_data = PoiDataBase(llm_config, ui)
+    new_links = []
 
     def register_poi_data(
         name: Annotated[str, "The name of POI"],
@@ -50,6 +51,10 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
         # todo: url: Annotated[str, "The URL of the POI"] = None
     ) -> str:
         return poi_data.register(name, description, category, location)
+
+    def register_new_link(url: str, score: float) -> str:
+        new_links.append({"url": url, "score": score})
+        return f"New link {url} with score {score} has been registered."
 
     # Get valid URL from user
     # todo: get_url_from_user(ui)
@@ -75,9 +80,10 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
 
     # Collect all unique sub-links
     # todo: pass ui object to get_all_unique_sub_urls
-    all_unique_sub_urls = get_recursive_subpages(webpage_url)
+    # all_unique_sub_urls = get_recursive_subpages(webpage_url)
+    all_unique_sub_urls = ["https://www.medulinriviera.info/"]
 
-    all_unique_sub_urls = set(list(all_unique_sub_urls)[:5])
+    # all_unique_sub_urls = set(list(all_unique_sub_urls)[:5])
 
     # Create agents and tools
     assistant_agent = AssistantAgent(
@@ -114,8 +120,16 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
         description="Register Point of Interest (POI)",
     )
 
+    register_function(
+        register_new_link,
+        caller=web_surfer,
+        executor=assistant_agent,
+        name="register_new_link",
+        description="Register new link with score",
+    )
+
     def scrape_poi_data(url: str) -> str:
-        initial_message = f"""Please collect all the Points of Interest (POI) data from this webpage: {url}."""
+        initial_message = f"""Please collect all the Points of Interest (POI) data and links present in the webpage {url} along with the score."""
         chat_result = assistant_agent.initiate_chat(
             web_surfer,
             message=initial_message,
@@ -138,6 +152,12 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
         sender="Workflow",
         recipient="User",
         body=f"List of all unregistered POIs:\n{table}",
+    )
+
+    ui.text_message(
+        sender="Workflow",
+        recipient="User",
+        body=f"List of all new links:\n{new_links}",
     )
 
     # Return combined summary of all processed links
