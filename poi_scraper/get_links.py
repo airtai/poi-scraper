@@ -34,7 +34,7 @@ def get_valid_subpages_bfs(start_url: str, max_depth: int) -> Set[str]:
     """Use breadth-first search to get valid subpages within the same domain and path, up to max_depth and MAX_SUBPAGES."""
     base_domain = urlparse(start_url).netloc
     base_path = urlparse(start_url).path
-    visited = set([start_url])  # Start with the initial URL as visited
+    visited = {start_url}  # Start with the initial URL as visited
     valid_links: Set[str] = set()
     queue = deque([(start_url, 0)])  # Queue stores (url, depth)
 
@@ -51,7 +51,7 @@ def get_valid_subpages_bfs(start_url: str, max_depth: int) -> Set[str]:
 
         # Fetch and parse the page
         try:
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
             soup = BeautifulSoup(response.text, "html.parser")
 

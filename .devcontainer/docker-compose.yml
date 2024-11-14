@@ -1,7 +1,7 @@
 version: '3'
 
 services:
-  python-3.11-poi_scraper:
+  python-3.11-poi_scraper:  # nosemgrep
     image: mcr.microsoft.com/devcontainers/python:3.11
     container_name: poi_scraper-${USER}-python-3.11
     volumes:

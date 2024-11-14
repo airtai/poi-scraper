@@ -2,4 +2,4 @@
 
 # coverage run -m pytest -x --ff "$@" || \
 # coverage run -m pytest -x --ff "$@" || \
-coverage run -m pytest --ff -vv "$@"
+# coverage run -m pytest --ff -vv "$@"

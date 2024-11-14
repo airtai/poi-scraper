@@ -57,10 +57,11 @@ class PoiDataBase:
 """
 
     def __init__(self, llm_config: dict[str, Any], ui: UI):
-        """Initialize POI validator with optional custom configuration
+        """Initialize POI validator with optional custom configuration.
 
         Args:
-            agent_config: Optional custom configuration for the validator agent
+            llm_config: Optional custom configuration for the validator agent
+            ui: The user interface object
         """
         self.llm_config = llm_config
         self.ui = ui
