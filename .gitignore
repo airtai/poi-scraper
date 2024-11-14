@@ -1,4 +1,3 @@
 # Ignore cache directories
 .cache/
-poi_scraper/__pycache__/
-tests/__pycache__/
+**/__pycache__/
