@@ -6,8 +6,8 @@ from fastagency import UI
 from fastagency.runtimes.autogen import AutoGenWorkflows
 
 from poi_scraper.custom_web_surfer import CustomWebSurferTool
-from poi_scraper.poi_validator import PoiDataBase
-from poi_scraper.utils import generate_poi_markdown_table, is_valid_url
+from poi_scraper.poi_manager import PoiManager
+from poi_scraper.utils import generate_poi_markdown_table, get_url_from_user
 
 system_message = """You are a web surfer agent tasked with identifying Points of Interest (POI) on a given webpage.
 Your objective is to find and list all notable POIs where people can visit or hang out.
@@ -38,10 +38,13 @@ wf = AutoGenWorkflows()
 
 @wf.register(name="poi_scraper", description="POI scraper chat")  # type: ignore[misc]
 def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
-    summaries: list[str] = []
+    # poi_data = PoiDataBase(llm_config, ui)
 
-    poi_data = PoiDataBase(llm_config, ui)
-    new_links = []
+    # Get valid URL from user
+    base_url = get_url_from_user(ui)
+
+    # Initialize POI manager
+    poi_manager = PoiManager(base_url)
 
     def register_poi_data(
         name: Annotated[str, "The name of POI"],
@@ -50,40 +53,10 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
         location: Annotated[Optional[str], "The location of the POI"] = None,
         # todo: url: Annotated[str, "The URL of the POI"] = None
     ) -> str:
-        return poi_data.register(name, description, category, location)
+        return poi_manager.register_new_poi(name, description, category, location)
 
     def register_new_link(url: str, score: float) -> str:
-        new_links.append({"url": url, "score": score})
-        return f"New link {url} with score {score} has been registered."
-
-    # Get valid URL from user
-    # todo: get_url_from_user(ui)
-    while True:
-        webpage_url = ui.text_input(
-            sender="Workflow",
-            recipient="User",
-            prompt="I can collect Points of Interest (POI) data from any webpage—just share the link with me!",
-        )
-        if is_valid_url(webpage_url):
-            break
-        ui.text_message(
-            sender="Workflow",
-            recipient="User",
-            body="The provided URL is not valid. Please enter a valid URL. Example: https://www.example.com",
-        )
-
-    ui.text_message(
-        sender="Workflow",
-        recipient="User",
-        body=f"Please wait. I am collecting all the sub-links from {webpage_url}",
-    )
-
-    # Collect all unique sub-links
-    # todo: pass ui object to get_all_unique_sub_urls
-    # all_unique_sub_urls = get_recursive_subpages(webpage_url)
-    all_unique_sub_urls = ["https://www.medulinriviera.info/"]
-
-    # all_unique_sub_urls = set(list(all_unique_sub_urls)[:5])
+        return poi_manager.register_new_link(url, score)
 
     # Create agents and tools
     assistant_agent = AssistantAgent(
@@ -138,30 +111,26 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
         )
         return str(chat_result.summary)
 
-    summaries = [scrape_poi_data(url) for url in all_unique_sub_urls]
+    poi_manager.process(scrape_poi_data)
 
-    table = generate_poi_markdown_table(poi_data.registered_pois)
+    table = generate_poi_markdown_table(poi_manager.poi_list)
     ui.text_message(
         sender="Workflow",
         recipient="User",
         body=f"List of all registered POIs:\n{table}",
     )
 
-    table = generate_poi_markdown_table(poi_data.un_registered_pois)
-    ui.text_message(
-        sender="Workflow",
-        recipient="User",
-        body=f"List of all unregistered POIs:\n{table}",
-    )
+    # table = generate_poi_markdown_table(poi_data.un_registered_pois)
+    # ui.text_message(
+    #     sender="Workflow",
+    #     recipient="User",
+    #     body=f"List of all unregistered POIs:\n{table}",
+    # )
 
     ui.text_message(
         sender="Workflow",
         recipient="User",
-        body=f"List of all new links:\n{new_links}",
+        body=f"List of all new links:\n{poi_manager.all_links_with_scores}",
     )
 
-    # Return combined summary of all processed links
-    return (
-        f"POI collection completed for {len(all_unique_sub_urls)} links.\n"
-        + "\n".join(summaries)
-    )
+    return f"POI collection completed for {base_url}."
