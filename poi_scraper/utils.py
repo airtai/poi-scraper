@@ -1,6 +1,8 @@
 from typing import Optional, Union
 from urllib.parse import urlparse
 
+from fastagency import UI
+
 
 def is_valid_url(url: str) -> bool:
     try:
@@ -21,3 +23,20 @@ def generate_poi_markdown_table(
         ]
     )
     return table_header + table_rows
+
+
+def get_url_from_user(ui: UI) -> str:
+    while True:
+        webpage_url = ui.text_input(
+            sender="Workflow",
+            recipient="User",
+            prompt="I can collect Points of Interest (POI) data from any webpage—just share the link with me!",
+        )
+        if is_valid_url(webpage_url):
+            break
+        ui.text_message(
+            sender="Workflow",
+            recipient="User",
+            body="The provided URL is not valid. Please enter a valid URL. Example: https://www.example.com",
+        )
+    return str(webpage_url)

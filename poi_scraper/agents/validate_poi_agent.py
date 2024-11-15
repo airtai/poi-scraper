@@ -1,29 +1,12 @@
-from dataclasses import dataclass
-from typing import Any, Optional, Union
+from typing import Any, Optional
 
 from autogen import AssistantAgent, UserProxyAgent
-from fastagency import UI
+
+from poi_scraper.poi_types import PoiValidationResult, ValidatePoiAgentProtocol
 
 
-@dataclass
-class PoiValidationResult:
-    """A class to represent the result of a POI (Point of Interest) validation.
-
-    Attributes:
-        is_valid (bool): Indicates whether the POI is valid.
-        name (str): The name of the POI.
-        description (str): The description of the POI.
-        raw_response (str): The raw response from the validation process.
-    """
-
-    is_valid: bool
-    name: str
-    description: str
-    raw_response: str
-
-
-class PoiDataBase:
-    """Class for storing the Points of Interest (POI)."""
+class ValidatePoiAgent(ValidatePoiAgentProtocol):
+    """A class to check if the gien name qualifies as a Point of Interest (POI)."""
 
     SYSTEM_MESSAGE = """You are a helpful agent. Your task is to determine if a given name qualifies as a Point of Interest (POI).
 
@@ -56,19 +39,15 @@ class PoiDataBase:
         - Your response: "No"
 """
 
-    def __init__(self, llm_config: dict[str, Any], ui: UI):
+    def __init__(self, llm_config: dict[str, Any]):
         """Initialize POI validator with optional custom configuration.
 
         Args:
             llm_config: Optional custom configuration for the validator agent
-            ui: The user interface object
         """
         self.llm_config = llm_config
-        self.ui = ui
         self._validator_agent = None
         self._user_proxy = None
-        self.registered_pois: dict[str, dict[str, Union[str, Optional[str]]]] = {}
-        self.un_registered_pois: dict[str, dict[str, Union[str, Optional[str]]]] = {}
 
     @property
     def validator_agent(self) -> AssistantAgent:
@@ -76,7 +55,7 @@ class PoiDataBase:
         if self._validator_agent is None:
             self._validator_agent = AssistantAgent(
                 name="POI_Validator_Agent",
-                system_message=PoiDataBase.SYSTEM_MESSAGE,
+                system_message=ValidatePoiAgent.SYSTEM_MESSAGE,
                 llm_config=self.llm_config,
                 human_input_mode="NEVER",
             )
@@ -93,9 +72,9 @@ class PoiDataBase:
             )
         return self._user_proxy
 
-    def register(
+    def validate(
         self, name: str, description: str, category: str, location: Optional[str]
-    ) -> str:
+    ) -> PoiValidationResult:
         initial_message = f"""Please confirm if the below is a Point of Interest (POI).
 
 - name:  {name}
@@ -118,28 +97,4 @@ class PoiDataBase:
             raw_response=last_message,
         )
 
-        if result.is_valid:
-            self.registered_pois[name] = {
-                "description": description,
-                "category": category,
-                "location": location,
-            }
-            self.ui.text_message(
-                sender="WebSurfer",
-                recipient="POI Database",
-                body=f"POI registered. name: {name}, description: {description}, category: {category}, location: {location}",
-            )
-            return "POI registered"
-        else:
-            self.un_registered_pois[name] = {
-                "description": description,
-                "category": category,
-                "location": location,
-            }
-
-        self.ui.text_message(
-            sender="WebSurfer",
-            recipient="POI Database",
-            body=f"POI not registered. name: {name}, description: {description}, category: {category}, location: {location}",
-        )
-        return "POI not registered"
+        return result
