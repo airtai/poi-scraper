@@ -39,6 +39,23 @@ class ScoredURL:
         return self.score > other.score  # Reverse for priority queue (highest first)
 
 
+@dataclass
+class PoiValidationResult:
+    """A class to represent the result of a POI (Point of Interest) validation.
+
+    Attributes:
+        is_valid (bool): Indicates whether the POI is valid.
+        name (str): The name of the POI.
+        description (str): The description of the POI.
+        raw_response (str): The raw response from the validation process.
+    """
+
+    is_valid: bool
+    name: str
+    description: str
+    raw_response: str
+
+
 class PoiCollector(Protocol):
     def register_poi(self, poi: PoiData) -> str: ...
     def register_link(self, link: LinkData) -> str: ...
@@ -46,3 +63,9 @@ class PoiCollector(Protocol):
 
 class ScraperFactoryProtocol(Protocol):
     def create_scraper(self, poi_manager: "PoiManager") -> Callable[[str], str]: ...
+
+
+class ValidatePoiAgentProtocol(Protocol):
+    def validate(
+        self, name: str, description: str, category: str, location: Optional[str]
+    ) -> PoiValidationResult: ...

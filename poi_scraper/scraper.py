@@ -3,9 +3,9 @@ from typing import Any, Callable
 
 from autogen import AssistantAgent, register_function
 
+from poi_scraper.agents.custom_web_surfer import CustomWebSurferTool
 from poi_scraper.poi_manager import PoiManager
 from poi_scraper.poi_types import ScraperFactoryProtocol
-from poi_scraper.scraper.custom_web_surfer import CustomWebSurferTool
 
 
 class ScraperFactory(ScraperFactoryProtocol):

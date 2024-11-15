@@ -4,6 +4,7 @@ from typing import Any
 from fastagency import UI
 from fastagency.runtimes.autogen import AutoGenWorkflows
 
+from poi_scraper.agents import ValidatePoiAgent
 from poi_scraper.poi_manager import PoiManager
 from poi_scraper.scraper import ScraperFactory
 from poi_scraper.utils import generate_poi_markdown_table, get_url_from_user
@@ -27,7 +28,8 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
     base_url = get_url_from_user(ui)
 
     # Initialize POI manager
-    poi_manager = PoiManager(base_url)
+    poi_validator = ValidatePoiAgent(llm_config=llm_config)
+    poi_manager = PoiManager(base_url, poi_validator)
 
     # Create scraper factory
     scraper_factory = ScraperFactory(llm_config)

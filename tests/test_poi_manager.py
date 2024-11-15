@@ -1,10 +1,12 @@
-from typing import Callable
+from typing import Callable, Optional
 from unittest import TestCase
 
 from poi_scraper.poi_manager import PoiManager
 from poi_scraper.poi_types import (
     PoiData,
+    PoiValidationResult,
     ScraperFactoryProtocol,
+    ValidatePoiAgentProtocol,
 )
 
 
@@ -24,6 +26,7 @@ class MockScraperFactory(ScraperFactoryProtocol):
             poi_manager.register_poi(
                 PoiData("name_3", "Description 3", "Category 3", "Location 3")
             )
+            poi_manager.register_link("https://example.com/3", 0.1)
             poi_manager.register_link("https://example.com/4", 0.6)
             poi_manager.register_link("https://example.com/5", 0.7)
             poi_manager.register_link("https://example.com/6", 0.8)
@@ -32,10 +35,23 @@ class MockScraperFactory(ScraperFactoryProtocol):
         return mock_scraper
 
 
+class MockValidatePoiAgent(ValidatePoiAgentProtocol):
+    def validate(
+        self, name: str, description: str, category: str, location: Optional[str]
+    ) -> PoiValidationResult:
+        return PoiValidationResult(
+            is_valid=True,
+            name=name,
+            description=description,
+            raw_response="Raw response",
+        )
+
+
 class TestPoiManager(TestCase):
     def setUp(self) -> None:
         self.base_url = "https://example.com"
-        self.manager = PoiManager(self.base_url)
+        poi_validator = MockValidatePoiAgent()
+        self.manager = PoiManager(self.base_url, poi_validator)
         self.mock_factory = MockScraperFactory(self)
 
     def test_should_process_url(self) -> None:

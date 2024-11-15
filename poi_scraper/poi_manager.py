@@ -2,11 +2,16 @@ from queue import PriorityQueue
 from typing import List, Optional, Set, Tuple, Union
 from urllib.parse import urlparse
 
-from poi_scraper.poi_types import PoiData, ScoredURL, ScraperFactoryProtocol
+from poi_scraper.poi_types import (
+    PoiData,
+    ScoredURL,
+    ScraperFactoryProtocol,
+    ValidatePoiAgentProtocol,
+)
 
 
 class PoiManager:
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, poi_validator: ValidatePoiAgentProtocol):
         """Initialize the POIManager with a base URL.
 
         This constructor sets up the initial state of the POIManager, including
@@ -15,8 +20,10 @@ class PoiManager:
 
         Args:
             base_url (str): The base URL to start managing points of interest from.
+            poi_validator (ValidatePoiAgentProtocol): The agent to validate points of interest.
         """
         self.base_url = base_url
+        self.poi_validator = poi_validator
         self.base_domain = urlparse(base_url).netloc
         self.visited_urls: Set[str] = set()
         self.url_queue: PriorityQueue[ScoredURL] = PriorityQueue()
@@ -25,6 +32,14 @@ class PoiManager:
         self._current_url_links_with_scores: List[Tuple[str, float]] = []
 
     def register_poi(self, poi: PoiData) -> str:
+        """Register a new Point of Interest (POI)."""
+        poi_validation_result = self.poi_validator.validate(
+            poi.name, poi.description, poi.category, poi.location
+        )
+
+        if not poi_validation_result.is_valid:
+            return f"POI validation failed for: {poi.name, poi.description}"
+
         self.poi_list[poi.name] = {
             "description": poi.description,
             "category": poi.category,
@@ -75,6 +90,8 @@ class PoiManager:
     def _process_new_urls(self) -> None:
         """Process new URLs and add them to queue."""
         for url, ai_score in self._current_url_links_with_scores:
+            if ai_score < 0.5:
+                continue
             if self._should_process_url(url):
                 depth_score = self._calculate_depth_score(url)
                 final_score = self._calculate_final_score(ai_score, depth_score)
