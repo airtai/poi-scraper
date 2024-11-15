@@ -5,7 +5,7 @@ from autogen import AssistantAgent, register_function
 
 from poi_scraper.agents.custom_web_surfer import CustomWebSurferTool
 from poi_scraper.poi_manager import PoiManager
-from poi_scraper.poi_types import ScraperFactoryProtocol
+from poi_scraper.poi_types import PoiData, ScraperFactoryProtocol
 
 
 class ScraperFactory(ScraperFactoryProtocol):
@@ -23,8 +23,8 @@ Instructions:
 
     - Scrape only the given webpage to identify POIs (do not explore any child pages or external links).
     - ALWAYS visit the full webpage before collecting POIs.
-    - NEVER call `register_poi_data` and `register_new_link` without visiting the full webpage. This is a very important instruction and you will be penalised if you do so.
-    - After visiting the webpage and identifying the POIs, you MUST call the `register_poi_data` function to record the POI.
+    - NEVER call `register_poi` and `register_new_link` without visiting the full webpage. This is a very important instruction and you will be penalised if you do so.
+    - After visiting the webpage and identifying the POIs, you MUST call the `register_poi` function to record the POI.
     - If you find any new links on the webpage, you can call the `register_new_link` function to record the link along with the score (0.0 to 1.0) indicating the relevance of the link to the POIs.
 
 Ensure that you strictly follow these instructions to capture accurate POI data."""
@@ -57,16 +57,25 @@ Ensure that you strictly follow these instructions to capture accurate POI data.
         )
 
         # Register the functions with proper type conversion
+        def register_poi(poi_data: dict[str, str]) -> str:
+            poi = PoiData(**poi_data)
+            poi_manager.register_poi(poi)
+            return f"POI registered: {poi_data['name']}"
+
         register_function(
-            poi_manager.register_poi,
+            register_poi,
             caller=web_surfer,
             executor=assistant_agent,
-            name="register_poi_data",
+            name="register_poi",
             description="Register Point of Interest (POI)",
         )
 
+        def register_link(url: str, score: float) -> str:
+            poi_manager.register_link(url, score)
+            return f"Link registered: {url}, AI score: {score}"
+
         register_function(
-            poi_manager.register_link,
+            register_link,
             caller=web_surfer,
             executor=assistant_agent,
             name="register_new_link",
