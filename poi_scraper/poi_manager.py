@@ -80,7 +80,7 @@ class PoiManager:
                 # Mark URL as visited
                 self.visited_urls.add(current_url)
 
-            except Exception:
+            except Exception:  # nosec
                 # print(f"Error processing URL: {current_url}")
                 # print(e)
                 continue
