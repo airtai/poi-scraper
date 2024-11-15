@@ -1,12 +1,42 @@
+from typing import Callable
 from unittest import TestCase
 
 from poi_scraper.poi_manager import PoiManager
+from poi_scraper.poi_types import (
+    PoiData,
+    ScraperFactoryProtocol,
+)
+
+
+class MockScraperFactory(ScraperFactoryProtocol):
+    def __init__(self, test_case: TestCase):
+        """Initialize the MockScraperFactory with a test case."""
+        self.test_case = test_case
+
+    def create_scraper(self, poi_manager: PoiManager) -> Callable[[str], str]:
+        def mock_scraper(url: str) -> str:
+            poi_manager.register_poi(
+                PoiData("name_1", "Description 1", "Category 1", "Location 1")
+            )
+            poi_manager.register_poi(
+                PoiData("name_2", "Description 2", "Category 2", "Location 2")
+            )
+            poi_manager.register_poi(
+                PoiData("name_3", "Description 3", "Category 3", "Location 3")
+            )
+            poi_manager.register_link("https://example.com/4", 0.6)
+            poi_manager.register_link("https://example.com/5", 0.7)
+            poi_manager.register_link("https://example.com/6", 0.8)
+            return "Chat summary"
+
+        return mock_scraper
 
 
 class TestPoiManager(TestCase):
     def setUp(self) -> None:
         self.base_url = "https://example.com"
         self.manager = PoiManager(self.base_url)
+        self.mock_factory = MockScraperFactory(self)
 
     def test_should_process_url(self) -> None:
         # Same domain
@@ -70,23 +100,8 @@ class TestPoiManager(TestCase):
             assert round(result, 2) == round(expected, 2)
 
     def test_process_flow(self) -> None:
-        def scraper(url: str) -> str:
-            self.manager.register_new_poi(
-                "name_1", "Description 1", "Category 1", "Location 1"
-            )
-            self.manager.register_new_poi(
-                "name_2", "Description 2", "Category 2", "Location 2"
-            )
-            self.manager.register_new_poi(
-                "name_3", "Description 3", "Category 3", "Location 3"
-            )
-            self.manager.register_new_link("https://example.com/4", 0.6)
-            self.manager.register_new_link("https://example.com/5", 0.7)
-            self.manager.register_new_link("https://example.com/6", 0.8)
-            return "Chat summary"
-
         # Process base URL
-        pois = self.manager.process(scraper)
+        pois = self.manager.process(self.mock_factory)
 
         # Verify visited set
         assert self.base_url in self.manager.visited_urls

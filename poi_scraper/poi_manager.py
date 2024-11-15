@@ -1,27 +1,8 @@
-from dataclasses import dataclass
 from queue import PriorityQueue
-from typing import Callable, List, Optional, Set, Tuple, Union
+from typing import List, Optional, Set, Tuple, Union
 from urllib.parse import urlparse
 
-
-@dataclass
-class ScoredURL:
-    url: str
-    score: float
-
-    def __lt__(self, other: "ScoredURL") -> bool:
-        """Compare two ScoredURL objects for less-than based on their scores.
-
-        This method is used to order ScoredURL objects in a priority queue,
-        where higher scores have higher priority.
-
-        Args:
-            other (ScoredURL): The other ScoredURL object to compare against.
-
-        Returns:
-            bool: True if the score of this ScoredURL is greater than the score of the other ScoredURL, False otherwise.
-        """
-        return self.score > other.score  # Reverse for priority queue (highest first)
+from poi_scraper.poi_types import PoiData, ScoredURL, ScraperFactoryProtocol
 
 
 class PoiManager:
@@ -43,23 +24,24 @@ class PoiManager:
         self.all_links_with_scores: List[Tuple[str, float]] = []
         self._current_url_links_with_scores: List[Tuple[str, float]] = []
 
-    def register_new_poi(
-        self, name: str, description: str, category: str, location: Optional[str]
-    ) -> str:
-        self.poi_list[name] = {
-            "description": description,
-            "category": category,
-            "location": location,
+    def register_poi(self, poi: PoiData) -> str:
+        self.poi_list[poi.name] = {
+            "description": poi.description,
+            "category": poi.category,
+            "location": poi.location,
         }
-        return f"POI registered: {name}, Category: {category}, Location: {location}"
+        return f"POI registered: {poi.name}, Category: {poi.category}, Location: {poi.location}"
 
-    def register_new_link(self, url: str, ai_score: float) -> str:
-        self.all_links_with_scores.append((url, ai_score))
-        return f"Link registered: {url}, AI score: {ai_score}"
+    def register_link(self, url: str, score: float) -> str:
+        self.all_links_with_scores.append((url, score))
+        return f"Link registered: {url}, AI score: {score}"
 
     def process(
-        self, scraper: Callable[[str], str]
+        self, scraper_factory: ScraperFactoryProtocol
     ) -> dict[str, dict[str, Union[str, Optional[str]]]]:
+        # Create scraper function
+        scraper = scraper_factory.create_scraper(self)
+
         # Initialize with base URL
         self._add_to_queue(self.base_url, 1.0)
 

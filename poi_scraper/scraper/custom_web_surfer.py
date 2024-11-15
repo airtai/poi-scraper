@@ -88,7 +88,7 @@ NEW LINK COLLECTION INSTRUCTIONS:
     - If the link is likely to lead to more POIs, assign a score closer to 1. If the link is unlikely to lead to more POIs, assign a score closer to 0.
     - If the url contains information about activities or broad categories where people can visit or gather such as tourist attractions, landmarks, parks, museums, cultural venues, and historic sites then assign a score closer to 1.0.
     - If the url contains information about contact-us, transport, about-us, privacy-policy, terms-and-conditions, etc. then assign a score closer to 0.0.
-    - For each link you MUST call `register_new_link` function to record the link along with the score (0.0 to 1.0) indicating the relevance of the link to the POIs. This is a very important instruction and you will be penalised if you do not do so.
+    - For each link you MUST call `register_link` function to record the link along with the score (0.0 to 1.0) indicating the relevance of the link to the POIs. This is a very important instruction and you will be penalised if you do not do so.
 
     - Few examples of the links with score:
         - link: https://www.kayak.co.in/Chennai.13827.guide/places, score: 1.0
