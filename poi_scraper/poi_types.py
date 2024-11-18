@@ -1,5 +1,6 @@
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Optional, Protocol
+from collections import defaultdict
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Protocol, Set
 
 if TYPE_CHECKING:
     from poi_scraper.poi_manager import PoiManager
@@ -62,10 +63,47 @@ class PoiCollector(Protocol):
 
 
 class ScraperFactoryProtocol(Protocol):
-    def create_scraper(self, poi_manager: "PoiManager") -> Callable[[str], str]: ...
+    def create_scraper(
+        self, poi_manager: "PoiManager"
+    ) -> Callable[["SessionMemory"], Dict[str, Any]]: ...
 
 
 class ValidatePoiAgentProtocol(Protocol):
     def validate(
         self, name: str, description: str, category: str, location: Optional[str]
     ) -> PoiValidationResult: ...
+
+
+@dataclass
+class PatternStats:
+    success_count: int
+    failure_count: int
+
+
+@dataclass
+class Link:
+    url: str
+    initial_score: float
+    justification: str
+
+
+@dataclass
+class PageStats:
+    pois: List[PoiData]  # pois found in page
+    description: str  # summary of the page
+    children_success_rate: (
+        float  # how many child links found and how many of them has atleast one poi
+    )
+    last_n_pages_poi_count: List[int]  # recent child pages poi count
+    unvisited_links: List[Link]  # after scraping, add the links present in the page
+
+
+@dataclass
+class SessionMemory:
+    visited_urls: Set[str] = field(default_factory=set)
+    pages: Dict[str, PageStats] = field(default_factory=dict)
+    patterns: Dict[str, PatternStats] = field(
+        default_factory=lambda: defaultdict(
+            lambda: PatternStats(success_count=0, failure_count=0)
+        )
+    )

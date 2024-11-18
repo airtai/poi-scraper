@@ -1,3 +1,5 @@
+# instructions to scrape only the given webpage and not to navigate to other pages.
+
 from typing import Annotated, Any, Optional
 
 from autogen.agentchat.chat import ChatResult

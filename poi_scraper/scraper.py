@@ -1,11 +1,14 @@
+# this should smartly pick the url to work on and register the scraped results.
+
+
 import os
-from typing import Any, Callable
+from typing import Any, Callable, Dict
 
 from autogen import AssistantAgent, register_function
 
 from poi_scraper.agents.custom_web_surfer import CustomWebSurferTool
 from poi_scraper.poi_manager import PoiManager
-from poi_scraper.poi_types import PoiData, ScraperFactoryProtocol
+from poi_scraper.poi_types import PoiData, ScraperFactoryProtocol, SessionMemory
 
 
 class ScraperFactory(ScraperFactoryProtocol):
@@ -25,7 +28,7 @@ Instructions:
     - ALWAYS visit the full webpage before collecting POIs.
     - NEVER call `register_poi` and `register_new_link` without visiting the full webpage. This is a very important instruction and you will be penalised if you do so.
     - After visiting the webpage and identifying the POIs, you MUST call the `register_poi` function to record the POI.
-    - If you find any new links on the webpage, you can call the `register_new_link` function to record the link along with the score (0.0 to 1.0) indicating the relevance of the link to the POIs.
+    - If you find any new links on the webpage, you can call the `register_new_link` function to record the link along with the score (1 - 5) indicating the relevance of the link to the POIs.
 
 Ensure that you strictly follow these instructions to capture accurate POI data."""
 
@@ -82,7 +85,10 @@ Ensure that you strictly follow these instructions to capture accurate POI data.
             description="Register new link with score",
         )
 
-        def scrape_poi_data(url: str) -> str:
+        def scrape_poi_data(
+            session_memory: SessionMemory,
+        ) -> Dict[str, Any]:  # this needs to send the formatted data to the poi_manager
+            # the initial message sould give the session memory for every page
             initial_message = f"Please collect all POIs and links from {url}"
             chat_result = assistant_agent.initiate_chat(
                 web_surfer,
