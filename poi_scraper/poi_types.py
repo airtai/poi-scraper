@@ -1,13 +1,30 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Protocol, Set
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Protocol,
+    Set,
+)
 
 if TYPE_CHECKING:
     from poi_scraper.poi_manager import PoiManager
 
 
 @dataclass
+class ScraperResult:
+    decision: Literal["TERMINATE", "CONTINUE"]
+    current_url: str
+    description: str
+
+
+@dataclass
 class PoiData:
+    current_url: str
     name: str
     description: str
     category: str
@@ -17,13 +34,13 @@ class PoiData:
 @dataclass
 class LinkData:
     url: str
-    score: float
+    score: int
 
 
 @dataclass
 class ScoredURL:
     url: str
-    score: float
+    score: int
 
     def __lt__(self, other: "ScoredURL") -> bool:
         """Compare two ScoredURL objects for less-than based on their scores.
@@ -65,7 +82,7 @@ class PoiCollector(Protocol):
 class ScraperFactoryProtocol(Protocol):
     def create_scraper(
         self, poi_manager: "PoiManager"
-    ) -> Callable[["SessionMemory"], Dict[str, Any]]: ...
+    ) -> Callable[["SessionMemory"], ScraperResult]: ...
 
 
 class ValidatePoiAgentProtocol(Protocol):
@@ -83,7 +100,7 @@ class PatternStats:
 @dataclass
 class Link:
     url: str
-    initial_score: float
+    initial_score: int
     justification: str
 
 
@@ -100,6 +117,7 @@ class PageStats:
 
 @dataclass
 class SessionMemory:
+    base_url: str
     visited_urls: Set[str] = field(default_factory=set)
     pages: Dict[str, PageStats] = field(default_factory=dict)
     patterns: Dict[str, PatternStats] = field(

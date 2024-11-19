@@ -32,7 +32,7 @@ class PoiManager:
         self.base_url = base_url
         self.poi_validator = poi_validator
         self.base_domain = urlparse(base_url).netloc
-        self.session_memory = SessionMemory()
+        self.session_memory = SessionMemory(base_url)
         self.max_pages = max_pages
 
     def _initialize_page_stats(self, current_url: str) -> None:
@@ -44,7 +44,7 @@ class PoiManager:
             unvisited_links=[],
         )
 
-    def register_poi(self, poi: PoiData, current_url: str) -> str:
+    def register_poi(self, poi: PoiData) -> str:
         """Register a new Point of Interest (POI)."""
         poi_validation_result = self.poi_validator.validate(
             poi.name, poi.description, poi.category, poi.location
@@ -53,14 +53,14 @@ class PoiManager:
         if not poi_validation_result.is_valid:
             return f"POI validation failed for: {poi.name, poi.description}"
 
-        if current_url not in self.session_memory.pages:
-            self._initialize_page_stats(current_url)
+        if poi.current_url not in self.session_memory.pages:
+            self._initialize_page_stats(poi.current_url)
 
-        self.session_memory.pages[current_url].pois.append(poi)
+        self.session_memory.pages[poi.current_url].pois.append(poi)
         return f"POI registered: {poi.name}, Category: {poi.category}, Location: {poi.location}"
 
     def register_link(
-        self, current_url: str, outgoing_url: str, score: float, justification: str
+        self, current_url: str, outgoing_url: str, score: int, justification: str
     ) -> str:
         """Register a new link with its AI score."""
         if current_url not in self.session_memory.pages:
@@ -124,12 +124,12 @@ class PoiManager:
 
                 # Check if the LLM has made a decision to terminate. Implies that the LLM has found all the POIs in the
                 # website and does not need to continue crawling
-                if scraping_result["decision"] == "TERMINATE":
+                if scraping_result.decision == "TERMINATE":
                     break
 
                 pages_visited += 1
 
-            except Exception as e:  # nosec
+            except Exception:  # nosec
                 # print("Error processing URL")
                 # print(e)
                 # raise e
@@ -143,20 +143,18 @@ class PoiManager:
         Args:
             scraping_result: Dictionary containing:
                 - current_url: str (URL that was actually scraped)
-                - pois: List[PoiData]
                 - description: str (page summary)
-                - outgoing_links: List[Link]
-                - decision: str ("TERMINATE" or "CONTINUE")
         """
-        current_url = scraping_result["current_url"]
+        current_url = scraping_result.current_url
 
         # 1. Mark URL as visited
         self.session_memory.visited_urls.add(current_url)
 
         # 2. Create new page stats
+        pois = self.session_memory.pages[current_url].pois
         self.session_memory.pages[current_url] = PageStats(
-            pois=self.session_memory.pages[current_url].pois,
-            description=scraping_result["description"],
+            pois=pois,
+            description=scraping_result.description,
             children_success_rate=0.0,
             last_n_pages_poi_count=[],
             unvisited_links=self.session_memory.pages[current_url].unvisited_links,
@@ -169,7 +167,7 @@ class PoiManager:
             parent_stats = self.session_memory.pages[parent_url]
 
             # Update last_n_pages_poi_count
-            parent_stats.last_n_pages_poi_count.append(len(scraping_result.pois))
+            parent_stats.last_n_pages_poi_count.append(len(pois))
             # if the length exceeds 2, then keep only the last 2 elements
             if len(parent_stats.last_n_pages_poi_count) > 2:
                 parent_stats.last_n_pages_poi_count = (
@@ -198,14 +196,10 @@ class PoiManager:
             )
 
         # 4. Update pattern statistics
-        if len(scraping_result["pois"]) > 0:
-            self.session_memory.patterns[
-                scraping_result["current_url"]
-            ].success_count += 1
+        if len(pois) > 0:
+            self.session_memory.patterns[scraping_result.current_url].success_count += 1
         else:
-            self.session_memory.patterns[
-                scraping_result["current_url"]
-            ].failure_count += 1
+            self.session_memory.patterns[scraping_result.current_url].failure_count += 1
 
     def _find_parent_url(self, current_url: str) -> Optional[str]:
         """Find parent URL by checking which page has this URL in its unvisited_links."""

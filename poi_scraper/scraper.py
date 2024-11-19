@@ -2,13 +2,18 @@
 
 
 import os
-from typing import Any, Callable, Dict
+from typing import Any, Callable
 
 from autogen import AssistantAgent, register_function
 
 from poi_scraper.agents.custom_web_surfer import CustomWebSurferTool
 from poi_scraper.poi_manager import PoiManager
-from poi_scraper.poi_types import PoiData, ScraperFactoryProtocol, SessionMemory
+from poi_scraper.poi_types import (
+    PoiData,
+    ScraperFactoryProtocol,
+    ScraperResult,
+    SessionMemory,
+)
 
 
 class ScraperFactory(ScraperFactoryProtocol):
@@ -19,20 +24,138 @@ class ScraperFactory(ScraperFactoryProtocol):
             llm_config (dict[str, Any]): The configuration for the LLM model.
         """
         self.llm_config = llm_config
-        self.system_message = """You are a web surfer agent tasked with identifying Points of Interest (POI) on a given webpage.
-Your objective is to find and list all notable POIs where people can visit or hang out.
+        self.system_message = """You are a specialized web crawler agent that selects URLs likely to contain
+Points of Interest (POIs). You'll receive the statistics of the website to help you make informed decisions.
+
+A POI could be: tourist attractions, business locations, service centers, landmarks, or any specific location with physical presence.
 
 Instructions:
 
-    - Scrape only the given webpage to identify POIs (do not explore any child pages or external links).
-    - ALWAYS visit the full webpage before collecting POIs.
-    - NEVER call `register_poi` and `register_new_link` without visiting the full webpage. This is a very important instruction and you will be penalised if you do so.
-    - After visiting the webpage and identifying the POIs, you MUST call the `register_poi` function to record the POI.
-    - If you find any new links on the webpage, you can call the `register_new_link` function to record the link along with the score (1 - 5) indicating the relevance of the link to the POIs.
+Step 1: Look at "Unvisited Links Available"
+- Each link has an Initial Score (1-5) and Justification
+- Higher scores suggest higher likelihood of POIs but these are initial guesses and may not be accurate
 
-Ensure that you strictly follow these instructions to capture accurate POI data."""
+Step 2: Check "Recent Performance"
+- Shows how many POIs were found in recently visited pages
+- If last 2 pages had 0 POIs, this indicates current pattern is not working
+- In such cases, ignore current pattern and try URLs from a different pattern
 
-    def create_scraper(self, poi_manager: PoiManager) -> Callable[[str], str]:
+Step 3: Review "Pattern Performance"
+- Shows how many child URLs under a parent pattern were successful
+- Example: "https://www.visitchennai.com/attractions/<category>: 2/3 success" means:
+ * Under parent URL pattern "https://www.visitchennai.com/attractions"
+ * Out of 3 child URLs visited (https://www.visitchennai.com/attractions/temples, https://www.visitchennai.com/attractions/museums, etc.)
+ * 2 of them contained POIs
+- Prefer patterns where child URLs consistently yield POIs
+
+Step 4: Make ONE of these two decisions:
+
+A) Select a URL to visit:
+  Response format:
+  URL: [paste the full URL]
+  Reason: [explain why this URL is promising based on its score AND pattern performance]
+
+B) Terminate the search:
+  Response format:
+  Decision: TERMINATE
+  Reason: [explain why no URLs are worth visiting]
+  Note: This will end the chat session and mark the task as complete
+
+
+TERMINATE when:
+1. All remaining unvisited URLs match patterns that historically failed
+2. Only administrative/utility pages remain
+
+Example 1 (Positive Case):
+Current Status:
+1. Unvisited Links Available:
+  - https://www.visitchennai.com//attractions/temples
+    Initial Score: 5
+    Justification: Directory of temples
+  - https://www.visitchennai.com//attractions/museums
+    Initial Score: 4
+    Justification: List of museums
+
+2. Recent Performance:
+  - https://www.visitchennai.com//attractions: 4 POIs found
+  - https://www.visitchennai.com//attractions/parks: 3 POIs found
+
+3. Pattern Performance:
+  - https://www.visitchennai.com//attractions/<category>: 3/3 success
+
+Example Response:
+URL: https://www.visitchennai.com//attractions/temples
+Reason: High initial score (5), parent pattern https://www.visitchennai.com//attractions has perfect success rate (3/3 child URLs had POIs), recent pages are finding POIs consistently
+
+Example 2 (Terminate Case):
+Current Status:
+1. Unvisited Links Available:
+  - https://www.visitchennai.com//contact-us
+    Initial Score: 1
+    Justification: Contact information page
+  - https://www.visitchennai.com//login
+    Initial Score: 1
+    Justification: User login page
+  - https://www.visitchennai.com//faq
+    Initial Score: 1
+    Justification: Help page
+
+2. Recent Performance:
+  - https://www.visitchennai.com//about-us: 0 POIs found
+  - https://www.visitchennai.com//terms: 0 POIs found
+
+3. Pattern Performance:
+  - https://www.visitchennai.com//info/<page>: 0/3 success
+
+Example Response:
+Decision: TERMINATE
+Reason: Only administrative pages remain (contact, login, faq), all with low scores (1). Last 2 pages found no POIs, and parent pattern /info has 0% success rate.
+"""
+
+    def _format_initial_message(self, session_memory: SessionMemory) -> str:
+        if not session_memory.pages:
+            return f"Please collect all POIs and links from: {session_memory.base_url}"
+
+        unvisited_links = " ".join(
+            [
+                f"  - Url: {link.url}\n    Initial Score: {link.initial_score}\n    Justification: {link.justification}\n"
+                for page in session_memory.pages.values()
+                for link in page.unvisited_links
+                if link.url not in session_memory.visited_urls
+            ]
+        )
+
+        recent_performance = "".join(
+            [
+                f"  - {url}: {len(stats.pois)} POIs found\n"
+                for url, stats in list(session_memory.pages.items())[
+                    -5:
+                ]  # Last 5 pages
+            ]
+        )
+
+        pattern_performance = "".join(
+            [
+                f"  - {pattern}: {stats.success_count}/{stats.success_count + stats.failure_count} success\n"
+                for pattern, stats in session_memory.patterns.items()
+            ]
+        )
+
+        return f"""Below is the statistics of the current scraping session:
+
+1. Unvisited Links Available:
+{unvisited_links}
+
+3. Recent Performance:
+{recent_performance}
+
+4. Pattern Performance:
+{pattern_performance}
+"""
+
+    def create_scraper(
+        self, poi_manager: PoiManager
+    ) -> Callable[[SessionMemory], ScraperResult]:
         assistant_agent = AssistantAgent(
             name="Assistant_Agent",
             system_message="You are a helpful agent",
@@ -73,9 +196,11 @@ Ensure that you strictly follow these instructions to capture accurate POI data.
             description="Register Point of Interest (POI)",
         )
 
-        def register_link(url: str, score: float) -> str:
-            poi_manager.register_link(url, score)
-            return f"Link registered: {url}, AI score: {score}"
+        def register_link(
+            current_url: str, outgoing_url: str, score: int, justification: str
+        ) -> str:
+            poi_manager.register_link(current_url, outgoing_url, score, justification)
+            return f"Link registered: {outgoing_url}, AI score: {score}"
 
         register_function(
             register_link,
@@ -87,15 +212,15 @@ Ensure that you strictly follow these instructions to capture accurate POI data.
 
         def scrape_poi_data(
             session_memory: SessionMemory,
-        ) -> Dict[str, Any]:  # this needs to send the formatted data to the poi_manager
-            # the initial message sould give the session memory for every page
-            initial_message = f"Please collect all POIs and links from {url}"
-            chat_result = assistant_agent.initiate_chat(
+        ) -> ScraperResult:
+            initial_message = self._format_initial_message(session_memory)
+            chat_result: ScraperResult = assistant_agent.initiate_chat(
                 web_surfer,
                 message=initial_message,
                 summary_method="reflection_with_llm",
                 max_turns=3,
             )
-            return str(chat_result.summary)
+
+            return chat_result
 
         return scrape_poi_data

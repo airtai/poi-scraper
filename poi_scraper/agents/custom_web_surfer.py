@@ -1,6 +1,4 @@
-# instructions to scrape only the given webpage and not to navigate to other pages.
-
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Literal, Optional
 
 from autogen.agentchat.chat import ChatResult
 from fastagency.runtimes.autogen.tools import WebSurferTool
@@ -12,24 +10,23 @@ class CustomWebSurferAnswer(BaseModel):
     is_successful: Annotated[
         bool, Field(..., description="Whether the task was successful")
     ]
-    poi_details: Annotated[
-        str,
-        Field(..., description="The details of all the POIs found in the webpage"),
+    decision: Annotated[
+        Literal["CONTINUE", "TERMINATE"],
+        Field(..., description="The decision whether to CONTINUE or TERMINATE"),
     ]
-    visited_links: Annotated[
-        list[HttpUrl],
-        Field(..., description="The list of visited links to generate the POI details"),
+    current_url: Annotated[
+        HttpUrl, Field(..., description="The URL of the current page")
     ]
+    description: Annotated[str, Field(..., description="A short summary of the page")]
 
     @staticmethod
     def get_example_answer() -> "CustomWebSurferAnswer":
         return CustomWebSurferAnswer(
-            task="Collect Points of Interest data and links with score from the webpage https://www.kayak.co.in/Chennai.13827.guide",
+            task="Collect Points of Interest data and links with score from the webpage https://example.com",
             is_successful=True,
-            poi_details="Below are the list of all the POIs found in the webpage: \n\n1. Name: Marina Beach, Location: Chennai\n2. Name: Kapaleeshwarar Temple, Location: Chennai\n3. Name: Arignar Anna Zoological Park, Location: Chennai\n4. Name: Guindy National Park. Below are the list of all links found in the webpage: 1. link: https://www.kayak.co.in/Chennai.13827.guide/activities, score: 0.75\n2. link: https://www.kayak.co.in/Chennai.13827.guide/contact-us, score: 0.0\n5. link: https://www.kayak.co.in/Chennai.13827.guide/places, score: 1.0\n\n",
-            visited_links=[
-                "https://www.kayak.co.in/Chennai.13827.guide",
-            ],
+            decision="CONTINUE",
+            current_url="https://example.com",
+            description="The page contains information about tourist attractions, landmarks, parks, museums, cultural venues, and historic sites.",
         )
 
 
@@ -62,7 +59,7 @@ Guiding Examples:
 
 For a given page your objective is to:
     - Collect as many POIs as possible from the given webpage.
-    - Return a list of links available on that page along with a score for each link. The score be in the range of 0 to 1. The score should be based on the likelihood that the link will lead to more POIs collections.
+    - Return a list of links available on that page along with a score for each link. The score be in the range of 1 to 5. The score should be based on the likelihood that the link will lead to more POIs collections.
 
 Follow the below instructions for collecting the POI's and new links from the webpage:
 
@@ -72,39 +69,138 @@ GENERAL INSTRUCTIONS:
 - Do not click on any links or navigate to other pages. Focus solely on the current page.
 - Create a summary after you have collected all the POI's from the webpage.  The summary must be in English!
 - If you get some 40x error, please do NOT give up immediately, but try again on the same page. Give up only if you get 40x error after multiple attempts.
+- NEVER call `register_poi` and `register_new_link` without visiting the full webpage. This is a very important instruction and you will be penalised if you do so.
+- After visiting the webpage and identifying the POIs, you MUST call the `register_poi` function to record the POI.
+- If you find any new links on the webpage, you can call the `register_new_link` function to record the link along with the score (1 - 5) indicating the relevance of the link and justfication to the POIs.
 
 
 POI COLLECTION INSTRUCTIONS:
-- If the webpage has POI information, then encode the POI name, location, category and description as a JSON string. For example:
-    {
-        "name":"Marina Beach",
-        "location":"Chennai",
-        "category":"Beach",
-        "description":"Marina Beach is a natural urban beach in Chennai, Tamil Nadu, India, along the Bay of Bengal. The beach runs from near Fort St. George in the north to Foreshore Estate in the south, a distance of 6.0 km (3.7 mi), making it the longest natural urban beach in the country."
-    }
-- Sometimes the webpages will have the category names like "Explore Chennai", "Things to do in Chennai", "Places to visit in Chennai" etc. You SHOULD NOT consider these as POIs. The POI's are the specific names like "Marina Beach", "Kapaleeshwarar Temple", "Arignar Anna Zoological Park" etc. NEVER EVER break this rule.
-- If there is no POI infomation in the given page then return "The page does not contain any POI information".
+
+A Point of Interest (POI) must be a specific physical location that people can visit. When you find a POI, encode it as JSON:
+{
+   "current_url": "URL of the page",
+   "name": "POI's official name",
+   "location": "City/Area where POI is located",
+   "category": "Type of POI (Beach, Temple, Museum, etc.)",
+   "description": "Brief description of the POI"
+}
+
+Important Rules:
+1. NEVER consider these as POIs:
+  - Generic category names ("Tourist Spots in Chennai")
+  - Section headings ("Places to Visit")
+  - List titles ("Top 10 Attractions")
+
+2. ONLY consider these as POIs:
+  - Specific locations ("Marina Beach")
+  - Named attractions ("Kapaleeshwarar Temple")
+  - Actual venues ("Government Museum")
+
+Examples:
+Valid POIs:
+{
+   "current_url": "https://example.com",
+   "name": "Marina Beach",
+   "location": "Chennai",
+   "category": "Beach",
+   "description": "Marina Beach is a natural urban beach along the Bay of Bengal, stretching 6.0 km..."
+}
+
+{
+   "current_url": "https://example.com",
+   "name": "DakshinaChitra Museum",
+   "location": "Muttukadu, Chennai",
+   "category": "Museum",
+   "description": "Living-history museum showcasing traditional South Indian crafts and architecture..."
+}
+
+Invalid POIs:
+- "Popular Beaches in Chennai"
+- "Heritage Sites to Explore"
+- "Weekend Getaways"
+
+If no specific POIs are found, return: "The page does not contain any POI information"
 
 NEW LINK COLLECTION INSTRUCTIONS:
-    - For each link on the page, assign a score between 0 and 1 based on the context of the link. The score should be based on the likelihood that the link will lead to more POIs.
-    - If the link is likely to lead to more POIs, assign a score closer to 1. If the link is unlikely to lead to more POIs, assign a score closer to 0.
-    - If the url contains information about activities or broad categories where people can visit or gather such as tourist attractions, landmarks, parks, museums, cultural venues, and historic sites then assign a score closer to 1.0.
-    - If the url contains information about contact-us, transport, about-us, privacy-policy, terms-and-conditions, etc. then assign a score closer to 0.0.
-    - For each link you MUST call `register_link` function to record the link along with the score (0.0 to 1.0) indicating the relevance of the link to the POIs. This is a very important instruction and you will be penalised if you do not do so.
 
-    - Few examples of the links with score:
-        - link: https://www.kayak.co.in/Chennai.13827.guide/places, score: 1.0
-        - link: https://www.kayak.co.in/Chennai.13827.guide/activities, score: 1.0
-        - link: https://www.kayak.co.in/Chennai.13827.guide/hotels/Taj-Coromandel, score: 1.0
-        - link: https://www.kayak.co.in/Chennai.13827.guide/nightlife, score: 1.0
-        - link: https://www.kayak.co.in/Chennai.13827.guide/food, score: 0.75
-        - link: https://www.kayak.co.in/Chennai.13827.guide/contact-us, score: 0.0
-        - link: https://www.kayak.co.in/Chennai.13827.guide/transport, score: 0.5
-        - link: https://www.kayak.co.in/Chennai.13827.guide/contact-us, score: 0.0
-        - link: https://www.kayak.co.in/Chennai.13827.guide/about-us, score: 0.0
-        - link: https://www.kayak.co.in/Chennai.13827.guide/privacy-policy, score: 0.0
-        - link: https://www.kayak.co.in/Chennai.13827.guide/faq, score: 0.0
+For each link found, you must:
+1. Analyze the URL and context
+2. Assign a score (1-5)
+3. Call register_link function
+4. Provide justification
 
+Scoring Guide:
+
+Score 5 (Definitely Contains POIs):
+- /attractions/temples
+- /tourist-spots/beaches
+- /places-to-visit/museums
+- /heritage-sites
+Reason: Direct links to specific attractions or POI categories
+
+Score 4 (Likely Contains POIs):
+- /neighborhoods/t-nagar
+- /shopping-districts
+- /popular-areas
+Reason: Areas that typically contain multiple POIs
+
+Score 3 (Might Contain POIs):
+- /tourism
+- /city-guide
+- /explore
+Reason: General pages that could lead to POI information
+
+Score 2 (Unlikely to Contain POIs):
+- /how-to-reach
+- /best-time-to-visit
+- /travel-tips
+Reason: Travel information without specific POIs
+
+Score 1 (No POIs):
+- /contact-us
+- /about
+- /privacy-policy
+- /login
+- /faq
+- /terms-conditions
+Reason: Administrative/utility pages
+
+Example Link Registrations:
+
+register_link(
+   current_url="https://example.com",
+   outgoing_url="https://example.com/attractions/temples",
+   score=5,
+   justification="Directory of temples, direct POI category"
+)
+
+register_link(
+   current_url="https://example.com",
+   outgoing_url="https://example.com/neighborhoods/mylapore",
+   score=4,
+   justification="Historic neighborhood with multiple attractions"
+)
+
+register_link(
+   current_url="https://example.com",
+   outgoing_url="https://example.com/city-guide",
+   score=3,
+   justification="General guide that might contain POI information"
+)
+
+register_link(
+   current_url="https://example.com",
+   outgoing_url="https://example.com/how-to-reach",
+   score=2,
+   justification="Travel information, unlikely to contain POIs"
+)
+
+register_link(
+   current_url="https://example.com",
+   outgoing_url="https://example.com/contact",
+   score=1,
+   justification="Contact page, no POI content expected"
+)
 
 FINAL MESSAGE:
 - Once you have retrieved all the POI's from the webpage, all links with score and created the summary, you need to send the JSON-encoded summary to the web_surfer.
@@ -212,8 +308,9 @@ THE LAST ERROR MESSAGE:
         answer = CustomWebSurferAnswer(
             task=task,
             is_successful=False,
-            poi_details=f"unexpected error occurred: {e!s}",
-            visited_links=[],
+            decision="CONTINUE",
+            current_url="",
+            description=f"unexpected error occurred: {e!s}",
         )
 
         return self.create_final_reply(task, answer)
@@ -225,10 +322,9 @@ THE LAST ERROR MESSAGE:
             else "We have failed to complete the task:\n\n"
         )
         retval += f"{task}\n\n"
-        retval += f"poi_details: {message.poi_details}\n\n"
-        retval += "Visited links:\n"
-        for link in message.visited_links:
-            retval += f"  - {link}\n"
+        retval += f"decision: {message.decision}\n"
+        retval += f"current_url: {message.current_url}\n"
+        retval += f"description: {message.description}\n\n"
 
         return retval
 

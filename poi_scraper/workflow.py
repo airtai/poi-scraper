@@ -7,7 +7,7 @@ from fastagency.runtimes.autogen import AutoGenWorkflows
 from poi_scraper.agents import ValidatePoiAgent
 from poi_scraper.poi_manager import PoiManager
 from poi_scraper.scraper import ScraperFactory
-from poi_scraper.utils import generate_poi_markdown_table, get_url_from_user
+from poi_scraper.utils import get_url_from_user
 
 llm_config = {
     "config_list": [
@@ -37,17 +37,17 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
     # Process
     poi_manager.process(scraper_factory)
 
-    table = generate_poi_markdown_table(poi_manager.poi_list)
-    ui.text_message(
-        sender="Workflow",
-        recipient="User",
-        body=f"List of all registered POIs:\n{table}",
-    )
+    # table = generate_poi_markdown_table(poi_manager.session_memory)
+    # ui.text_message(
+    #     sender="Workflow",
+    #     recipient="User",
+    #     body=f"List of all registered POIs:\n{table}",
+    # )
 
-    ui.text_message(
-        sender="Workflow",
-        recipient="User",
-        body=f"List of all new links:\n{poi_manager.all_links_with_scores}",
-    )
+    # ui.text_message(
+    #     sender="Workflow",
+    #     recipient="User",
+    #     body=f"List of all new links:\n{poi_manager.all_links_with_scores}",
+    # )
 
     return f"POI collection completed for {base_url}."
