@@ -403,13 +403,6 @@ class PoiManager:
         while not self.url_queue.empty():
             link = self.url_queue.get()
 
-            print("*" * 80)
-            print(f"{link.site.get_url_scores(decimals=3)}")
-            print("*" * 80)
-            print(f"{link.url=} - {link.score=}")
-            print("*" * 80)
-            print(f"{self.urls_with_less_score=}")
-
             # Process URL using AI
             pois_found, urls_found = scrape(link.url)
 
