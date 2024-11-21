@@ -197,6 +197,8 @@ Output format:
 
     - Example Output:
         {
+            "task": "Collect POIs and URLs from the webpage",
+            "is_successful": true,
             "pois_found": [
                 {
                     "name": "Golden Gate Bridge",
@@ -210,7 +212,64 @@ Output format:
                 "https://example.com/about": 3
             }
         }
+
+Common Mistakes to Avoid:
+    - Do not include any additional text or formatting in the final JSON output.
 """
+
+    @property
+    def example_answer(self) -> CustomWebSurferAnswer:
+        return CustomWebSurferAnswer.get_example_answer()
+
+    @property
+    def error_message(self) -> str:
+        return f"""Please output the JSON-encoded answer only in the following format before trying to terminate the chat.
+
+IMPORTANT:
+  - NEVER enclose JSON-encoded answer in any other text or formatting including '```json' ... '```' or similar!
+  - Do not include any additional text or formatting in the final JSON output.
+
+EXAMPLE:
+
+{self.example_answer.model_dump_json()}
+
+NEGATIVE EXAMPLES:
+
+1. Do NOT include 'TERMINATE' in the same message as the JSON-encoded answer!
+
+{self.example_answer.model_dump_json()}
+
+TERMINATE
+
+2. Do NOT include triple backticks or similar!
+
+```json
+{self.example_answer.model_dump_json()}
+```
+
+THE LAST ERROR MESSAGE:
+
+{self.last_is_termination_msg_error}
+"""
+
+    def _is_termination_msg(self, msg: dict[str, Any]) -> bool:
+        try:
+            CustomWebSurferAnswer.model_validate_json(msg["content"])
+            return True
+        except Exception as e:
+            self.last_is_termination_msg_error = str(e)
+            return False
+
+    def _check_for_error(self, chat_result: ChatResult) -> Optional[str]:
+        messages = [msg["content"] for msg in chat_result.chat_history]
+        last_message = messages[-1]
+
+        try:
+            CustomWebSurferAnswer.model_validate_json(last_message)
+        except Exception:
+            return self.error_message
+
+        return None
 
     def create(
         self,
@@ -227,6 +286,7 @@ Output format:
             system_message="You are a helpful agent",
             llm_config=self.llm_config,
             human_input_mode="NEVER",
+            is_termination_msg=self._is_termination_msg,
         )
 
         web_surfer_agent = AssistantAgent(
@@ -250,13 +310,20 @@ Output format:
 
         def scrape(url: str) -> tuple[list[PoiData], dict[str, Literal[1, 2, 3, 4, 5]]]:
             """Scrape the URL for POI data and relevant urls."""
-            message = f"Please collect all POIs and urla from {url}"
-            chat_result = assistant_agent.initiate_chat(
-                web_surfer_agent,
-                message=message,
-                summary_method="reflection_with_llm",
-                max_turns=1,
-            )
+            message: Optional[str] = f"Please collect all POIs and urla from {url}"
+            clear_history = True
+
+            while message is not None:
+                chat_result = assistant_agent.initiate_chat(
+                    web_surfer_agent,
+                    message=message,
+                    summary_method="reflection_with_llm",
+                    max_turns=3,
+                    clear_history=clear_history,
+                )
+                message = self._check_for_error(chat_result)
+                clear_history = False
+
             return self._transform_chat_result(chat_result)
 
         return scrape

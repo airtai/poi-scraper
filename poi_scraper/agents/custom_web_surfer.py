@@ -34,12 +34,13 @@ Your goal is to collect:
 Step-by-Step Instructions:
 
 General Guidelines:
-    - Visit the entire webpage and scroll to the bottom to view all content.
+    - Visit the entire webpage and scroll to the bottom to view all content. You will be peanalized if you do not scroll to the bottom.
     - Do not click on links or navigate to other pages; focus on the current page only.
     - If you encounter a 40x error, retry the page several times before giving up.
 
 POI Collection:
-    - Look for POIs (specific places) on the page. For each POI, gather:
+    - Look for POIs (specific places) on the page. Make sure you visit the entire page to find all POIs. This is non-negotiable and you will be penalized if you do not do so.
+    - For each POI, gather:
         - Name: The name of the POI.
         - Location: The location of the POI (e.g., city or region).
         - Category: The type of POI (e.g., Beach, Temple, Museum).
