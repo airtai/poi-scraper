@@ -171,7 +171,7 @@ class Scraper:
 
 Instructions:
     1. Scrape the webpage:
-        - Use your web scraping tool to extract POIs and URLs from the provided webpage.
+        - You MUST use the 'Web_Surfer_Tool' to scrape the webpage. This tool will extract POIs and URLs from the webpage for you.
         - Focus only on the provided webpage. Do not explore child pages or external links.
         - Ensure you scroll through the entire webpage to capture all visible content.
 
@@ -402,6 +402,13 @@ class PoiManager:
 
         while not self.url_queue.empty():
             link = self.url_queue.get()
+
+            print("*" * 80)
+            print(f"{link.site.get_url_scores(decimals=3)}")
+            print("*" * 80)
+            print(f"{link.url=} - {link.score=}")
+            print("*" * 80)
+            print(f"{self.urls_with_less_score=}")
 
             # Process URL using AI
             pois_found, urls_found = scrape(link.url)

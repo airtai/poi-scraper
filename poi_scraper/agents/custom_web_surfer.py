@@ -34,8 +34,9 @@ Your goal is to collect:
 Step-by-Step Instructions:
 
 General Guidelines:
-    - Visit the entire webpage and scroll to the bottom to view all content. You will be peanalized if you do not scroll to the bottom.
+    - You MUST scrape the entire webpage before anything else. This is non-negotiable and failure to do so will result in a penalty.
     - Do not click on links or navigate to other pages; focus on the current page only.
+    - Do not use web searching for gathering information. We are only interested in the content of the provided webpage.
     - If you encounter a 40x error, retry the page several times before giving up.
 
 POI Collection:
