@@ -4,6 +4,7 @@ import statistics
 from dataclasses import dataclass, field
 from queue import PriorityQueue
 from typing import Any, Callable, List, Literal, Optional, Union
+from urllib.parse import urlparse
 
 from autogen import AssistantAgent
 from autogen.agentchat.chat import ChatResult
@@ -14,6 +15,7 @@ from poi_scraper.poi_types import (
     PoiData,
     ValidatePoiAgentProtocol,
 )
+from poi_scraper.utils import filter_same_domain_urls
 
 
 @dataclass
@@ -352,11 +354,12 @@ class PoiManager:
         """
         self.base_url = base_url
         self.poi_validator = poi_validator
-        # self.base_domain = urlparse(base_url).netloc
+        self.base_domain = urlparse(base_url).netloc
         self.url_queue: PriorityQueue[Link] = PriorityQueue()
         self.pois: dict[str, dict[str, Union[str, Optional[str]]]] = {}
+        self.urls_with_less_score: dict[str, int] = {}
 
-    def register_pois(self, pois: List[PoiData]) -> None:
+    def _register_pois(self, pois: List[PoiData]) -> None:
         """Register the new Point of Interests (POI)."""
         for poi in pois:
             poi_validation_result = self.poi_validator.validate(
@@ -370,39 +373,52 @@ class PoiManager:
                     "location": poi.location,
                 }
 
+    def _add_new_links_to_queue(
+        self, link: Link, min_score: Optional[int] = None
+    ) -> None:
+        """Add unvisited links to queue if they meet score threshold."""
+        queue_urls = {link.url for link in self.url_queue.queue}
+
+        for new_link in link.site.urls.values():
+            if new_link.visited or new_link.url in queue_urls:
+                continue
+
+            if not min_score or new_link.score >= min_score:
+                self.url_queue.put(new_link)
+            else:
+                self.urls_with_less_score[new_link.url] = new_link.estimated_score
+
     def process(
-        self, scraper: Scraper
+        self, scraper: Scraper, min_score: Optional[int] = None
     ) -> tuple[dict[str, dict[str, Union[str, Optional[str]]]], Site]:
         # Create scraper function
-        scrape_func = scraper.create()
+        scrape = scraper.create()
 
         # Initialize with base URL
         homepage = Link.create(parent=None, url=self.base_url, estimated_score=5)
 
         # Add the homepage to the queue
         self.url_queue.put(homepage)
+
         while not self.url_queue.empty():
             link = self.url_queue.get()
 
             # Process URL using AI
-            pois_found, urls_found = scrape_func(link.url)
+            pois_found, urls_found = scrape(link.url)
+
+            # Remove urls that are not from the same domain
+            same_domain_urls = filter_same_domain_urls(urls_found, self.base_domain)
 
             # Record the visit
             link.record_visit(
                 poi_found=len(pois_found) > 0,
-                urls_found=urls_found,
+                urls_found=same_domain_urls,
             )
 
             # Register the POIs found
-            self.register_pois(pois_found)
+            self._register_pois(pois_found)
 
             # Add the new links to the queue
-            for new_link in link.site.urls.values():
-                if not new_link.visited:
-                    exists_in_queue = any(
-                        link.url == new_link.url for link in self.url_queue.queue
-                    )
-                    if not exists_in_queue:
-                        self.url_queue.put(new_link)
+            self._add_new_links_to_queue(link, min_score)
 
         return self.pois, homepage.site

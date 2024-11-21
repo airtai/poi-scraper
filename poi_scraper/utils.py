@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Literal, Optional, Union
 from urllib.parse import urlparse
 
 from fastagency import UI
@@ -40,3 +40,13 @@ def get_url_from_user(ui: UI) -> str:
             body="The provided URL is not valid. Please enter a valid URL. Example: https://www.example.com",
         )
     return str(webpage_url)
+
+
+def filter_same_domain_urls(
+    urls_found: dict[str, Literal[1, 2, 3, 4, 5]], base_domain: str
+) -> dict[str, Literal[1, 2, 3, 4, 5]]:
+    return {
+        url: score
+        for url, score in urls_found.items()
+        if urlparse(url).netloc == base_domain
+    }

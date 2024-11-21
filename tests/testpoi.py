@@ -11,9 +11,11 @@ from poi_scraper.poi_types import (
 
 class TestLinkCreation:
     def test_create_link(self) -> None:
-        link = Link.create(parent=None, url="https://example.com", estimated_score=5)
+        link = Link.create(
+            parent=None, url="https://www.example.com", estimated_score=5
+        )
 
-        assert link.url == "https://example.com"
+        assert link.url == "https://www.example.com"
         assert link.estimated_score == 5
         assert link.parents == set()
         assert not link.visited
@@ -24,23 +26,25 @@ class TestLinkCreation:
 
 class TestPoiScore:
     def test_score(self) -> None:
-        home = Link.create(parent=None, url="https://example.com", estimated_score=5)
+        home = Link.create(
+            parent=None, url="https://www.example.com", estimated_score=5
+        )
         assert home.score == 5
 
         home.record_visit(
             poi_found=False,
             urls_found={
-                "https://example.com/places": 4,
-                "https://example.com/about": 3,
+                "https://www.example.com/places": 4,
+                "https://www.example.com/about": 3,
             },
         )
-        places = home.site.urls["https://example.com/places"]
-        about = home.site.urls["https://example.com/about"]
+        places = home.site.urls["https://www.example.com/places"]
+        about = home.site.urls["https://www.example.com/about"]
 
         places.record_visit(
             poi_found=True,
             urls_found={
-                "https://example.com/places/something_else": 4,
+                "https://www.example.com/places/something_else": 4,
             },
         )
 
@@ -60,10 +64,10 @@ class TestPoiScore:
 
         scores = home.site.get_url_scores(decimals=3)
         expected = {
-            "https://example.com": 5.0,
-            "https://example.com/about": 3.165,
-            "https://example.com/places": 4.165,
-            "https://example.com/places/something_else": 4,
+            "https://www.example.com": 5.0,
+            "https://www.example.com/about": 3.165,
+            "https://www.example.com/places": 4.165,
+            "https://www.example.com/places/something_else": 4,
         }
         assert scores == expected
 
@@ -93,14 +97,18 @@ class MockScraper(Scraper):
                 ]
 
                 urls_found = {
-                    "https://example.com/3": 1,
-                    "https://example.com/4": 2,
-                    "https://example.com/5": 3,
+                    "https://www.example.com/3": 1,
+                    "https://www.example.com/4": 2,
+                    "https://www.example.com/5": 3,
+                    "https://www.someother-domain.com/3": 4,
                 }
 
-                return pois_found, urls_found
+                return (
+                    pois_found,
+                    urls_found,
+                )  # return the POIs and URLs for the first call
 
-            return [], {}
+            return [], {}  # return empty lists from the second call
 
         return mock_scrape
 
@@ -119,7 +127,7 @@ class MockValidatePoiAgent(ValidatePoiAgentProtocol):
 
 class TestPoiManager(TestCase):
     def setUp(self) -> None:
-        self.base_url = "https://example.com"
+        self.base_url = "https://www.example.com"
         poi_validator = MockValidatePoiAgent()
         self.manager = PoiManager(self.base_url, poi_validator)
         self.mock_scrape = MockScraper(self)
@@ -147,10 +155,41 @@ class TestPoiManager(TestCase):
         }
 
         expected = {
-            "https://example.com": 5,
-            "https://example.com/3": 0.774,
-            "https://example.com/4": 1.774,
-            "https://example.com/5": 2.774,
+            "https://www.example.com": 5,
+            "https://www.example.com/3": 0.774,
+            "https://www.example.com/4": 1.774,
+            "https://www.example.com/5": 2.774,
+        }
+
+        assert site.get_url_scores(decimals=3) == expected
+
+    def test_process_flow_with_min_score(self) -> None:
+        # Process base URL
+        pois_list, site = self.manager.process(self.mock_scrape, min_score=2)
+
+        assert pois_list == {
+            "name_1": {
+                "description": "Description 1",
+                "category": "Category 1",
+                "location": "Location 1",
+            },
+            "name_2": {
+                "description": "Description 2",
+                "category": "Category 2",
+                "location": "Location 2",
+            },
+            "name_3": {
+                "description": "Description 3",
+                "category": "Category 3",
+                "location": "Location 3",
+            },
+        }
+
+        expected = {
+            "https://www.example.com": 5,
+            "https://www.example.com/3": 0.835,
+            "https://www.example.com/4": 1.835,
+            "https://www.example.com/5": 2.835,
         }
 
         assert site.get_url_scores(decimals=3) == expected
