@@ -6,9 +6,11 @@ from queue import PriorityQueue
 from typing import Any, Callable, List, Literal, Optional, Union
 
 from autogen import AssistantAgent
+from autogen.agentchat.chat import ChatResult
 
 from poi_scraper.agents.custom_web_surfer import CustomWebSurferTool
 from poi_scraper.poi_types import (
+    CustomWebSurferAnswer,
     PoiData,
     ValidatePoiAgentProtocol,
 )
@@ -163,7 +165,52 @@ class Scraper:
     """A scraper factory that creates a callable scraper function."""
 
     llm_config: dict[str, Any]
-    system_message: str = """You are a web surfer agent..."""  # your existing message
+    system_message: str = """You are a web surfer agent tasked with collecting Points of Interest (POIs) from a given webpage.
+
+Instructions:
+    1. Scrape the webpage:
+        - Use your web scraping tool to extract POIs and URLs from the provided webpage.
+        - Focus only on the provided webpage. Do not explore child pages or external links.
+        - Ensure you scroll through the entire webpage to capture all visible content.
+
+    2. Collect POIs:
+
+        - Identify notable POIs, such as landmarks, attractions, or places where people can visit or hang out.
+        - For each POI, gather the following details:
+            - Name: The name of the POI.
+            - Location: Where the POI is located (e.g., city or region).
+            - Category: The type of POI (e.g., Beach, Park, Museum).
+            - Description: A short summary of the POI.
+
+    3. Identify URLs:
+
+        - List all URLs found on the page.
+        - Assign a relevance score (1-5) to each URL:
+            - 5: Very likely to lead to more POIs (e.g., “places,” “activities,” “landmarks”).
+            - 1: Unlikely to lead to POIs (e.g., “contact-us,” “terms-and-conditions”).
+
+Output format:
+
+    - Return the data as a JSON object containing:
+        - pois_found: A list of POIs with their details.
+        - urls_found: A dictionary of URLs with their relevance scores.
+
+    - Example Output:
+        {
+            "pois_found": [
+                {
+                    "name": "Golden Gate Bridge",
+                    "location": "San Francisco",
+                    "category": "Landmark",
+                    "description": "Iconic suspension bridge..."
+                }
+            ],
+            "urls_found": {
+                "https://example.com/places": 5,
+                "https://example.com/about": 3
+            }
+        }
+"""
 
     def create(
         self,
@@ -175,9 +222,26 @@ class Scraper:
             - List of POI data dictionaries
             - List of tuples containing (url, relevance_score)
         """
-        assistant_agent = self._create_assistant()
-        web_surfer_agent = self._create_web_surfer_agent()
-        web_surfer_tool = self._create_web_surfer_tool()
+        assistant_agent = AssistantAgent(
+            name="Assistant_Agent",
+            system_message="You are a helpful agent",
+            llm_config=self.llm_config,
+            human_input_mode="NEVER",
+        )
+
+        web_surfer_agent = AssistantAgent(
+            name="WebSurfer_Agent",
+            system_message=self.system_message,
+            llm_config=self.llm_config,
+            human_input_mode="NEVER",
+        )
+
+        web_surfer_tool = CustomWebSurferTool(
+            name_prefix="Web_Surfer_Tool",
+            llm_config=self.llm_config,
+            summarizer_llm_config=self.llm_config,
+            bing_api_key=os.getenv("BING_API_KEY"),
+        )
 
         web_surfer_tool.register(
             caller=web_surfer_agent,
@@ -185,51 +249,26 @@ class Scraper:
         )
 
         def scrape(url: str) -> tuple[list[PoiData], dict[str, Literal[1, 2, 3, 4, 5]]]:
-            """Scrape the URL for POI data and relevant links."""
-            message = f"Please collect all POIs and links from {url}"
-            result = assistant_agent.initiate_chat(
+            """Scrape the URL for POI data and relevant urls."""
+            message = f"Please collect all POIs and urla from {url}"
+            chat_result = assistant_agent.initiate_chat(
                 web_surfer_agent,
                 message=message,
                 summary_method="reflection_with_llm",
-                max_turns=3,
+                max_turns=1,
             )
-            # todo: Make sure the model returns the formatted output
-            return self._parse_result(result.summary)
+            return self._transform_chat_result(chat_result)
 
         return scrape
 
-    def _parse_result(
-        self, summary: str
+    def _transform_chat_result(
+        self, chat_result: ChatResult
     ) -> tuple[list[PoiData], dict[str, Literal[1, 2, 3, 4, 5]]]:
-        # Parse the summary to extract POI data and links
-        return [], {}
+        messages = [msg["content"] for msg in chat_result.chat_history]
+        last_message = messages[-1]
 
-    def _create_assistant(self) -> AssistantAgent:
-        """Creates the assistant agent."""
-        return AssistantAgent(
-            name="Assistant_Agent",
-            system_message="You are a helpful agent",
-            llm_config=self.llm_config,
-            human_input_mode="NEVER",
-        )
-
-    def _create_web_surfer_agent(self) -> AssistantAgent:
-        """Creates the web surfer agent."""
-        return AssistantAgent(
-            name="WebSurfer_Agent",
-            system_message=self.system_message,
-            llm_config=self.llm_config,
-            human_input_mode="NEVER",
-        )
-
-    def _create_web_surfer_tool(self) -> CustomWebSurferTool:
-        """Creates the web surfer tool."""
-        return CustomWebSurferTool(
-            name_prefix="Web_Surfer_Tool",
-            llm_config=self.llm_config,
-            summarizer_llm_config=self.llm_config,
-            bing_api_key=os.getenv("BING_API_KEY"),
-        )
+        websurfer_answer_obj = CustomWebSurferAnswer.model_validate_json(last_message)
+        return websurfer_answer_obj.pois_found, websurfer_answer_obj.urls_found
 
 
 class PoiManager:
