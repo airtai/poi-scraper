@@ -80,7 +80,7 @@ class MockScraper(Scraper):
 
     def create(
         self,
-    ) -> Callable[[str], tuple[list[PoiData], dict[str, Literal[1, 2, 3, 4, 5]]]]:
+    ) -> Callable[[str], str]:
         def mock_scrape(
             url: str,
         ) -> tuple[list[PoiData], dict[str, Literal[1, 2, 3, 4, 5]]]:

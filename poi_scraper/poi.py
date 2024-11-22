@@ -3,10 +3,10 @@ import os
 import statistics
 from dataclasses import dataclass, field
 from queue import PriorityQueue
-from typing import Any, Callable, List, Literal, Optional, Union
+from typing import Any, Callable, List, Literal, Optional, Union, Tuple
 from urllib.parse import urlparse
 
-from autogen import AssistantAgent
+from autogen import AssistantAgent, register_function
 from autogen.agentchat.chat import ChatResult
 
 from poi_scraper.agents.custom_web_surfer import CustomWebSurferTool
@@ -171,9 +171,16 @@ class Scraper:
 
 Instructions:
     1. Scrape the webpage:
+
         - You MUST use the 'Web_Surfer_Tool' to scrape the webpage. This tool will extract POIs and URLs from the webpage for you.
         - Focus only on the provided webpage. Do not explore child pages or external links.
         - Ensure you scroll through the entire webpage to capture all visible content.
+        - NEVER call `register_poi` and `register_url` without visiting the full webpage. This is a very important instruction and you will be penalised if you do so.
+        - After visiting the webpage and identifying the POIs, you MUST call the `register_poi` function to record the POI.
+        - You need to call `register_poi` function for each POI found on the webpage. Do not call the function with list of all POIs at once.
+            - Correct example: `register_poi({"name": "POI1", "location": "City", "category": "Park", "description": "Description"})`
+            - Incorrect example: `register_poi([{"name": "POI1", "location": "City", "category": "Park", "description": "Description"}, {"name": "POI2", "location": "City", "category": "Park", "description": "Description"}])`
+        - If you find any new urls on the webpage, you MUST call the `register_url` function to record the url along with the score (1 - 5) indicating the relevance of the link to the POIs.
 
     2. Collect POIs:
 
@@ -191,92 +198,23 @@ Instructions:
             - 5: Very likely to lead to more POIs (e.g., “places,” “activities,” “landmarks”).
             - 1: Unlikely to lead to POIs (e.g., “contact-us,” “terms-and-conditions”).
 
-Output format:
-
-    - Return the data as a JSON object containing:
-        - pois_found: A list of POIs with their details.
-        - urls_found: A dictionary of URLs with their relevance scores.
-
-    - Example Output:
-        {
-            "task": "Collect POIs and URLs from the webpage",
-            "is_successful": true,
-            "pois_found": [
-                {
-                    "name": "Golden Gate Bridge",
-                    "location": "San Francisco",
-                    "category": "Landmark",
-                    "description": "Iconic suspension bridge..."
-                }
-            ],
-            "urls_found": {
-                "https://example.com/places": 5,
-                "https://example.com/about": 3
-            }
-        }
-
-Common Mistakes to Avoid:
-    - Do not include any additional text or formatting in the final JSON output.
-"""
-
-    @property
-    def example_answer(self) -> CustomWebSurferAnswer:
-        return CustomWebSurferAnswer.get_example_answer()
-
-    @property
-    def error_message(self) -> str:
-        return f"""Please output the JSON-encoded answer only in the following format before trying to terminate the chat.
-
-IMPORTANT:
-  - NEVER enclose JSON-encoded answer in any other text or formatting including '```json' ... '```' or similar!
-  - Do not include any additional text or formatting in the final JSON output.
-
-EXAMPLE:
-
-{self.example_answer.model_dump_json()}
-
-NEGATIVE EXAMPLES:
-
-1. Do NOT include 'TERMINATE' in the same message as the JSON-encoded answer!
-
-{self.example_answer.model_dump_json()}
-
-TERMINATE
-
-2. Do NOT include triple backticks or similar!
-
-```json
-{self.example_answer.model_dump_json()}
-```
-
-THE LAST ERROR MESSAGE:
-
-{self.last_is_termination_msg_error}
+Termination:
+    - Once you have collected all the POIs and URLs from the webpage, you can terminate the chat by sending only "TERMINATE" as the message.
 """
 
     def _is_termination_msg(self, msg: dict[str, Any]) -> bool:
-        try:
-            CustomWebSurferAnswer.model_validate_json(msg["content"])
-            return True
-        except Exception as e:
-            self.last_is_termination_msg_error = str(e)
-            return False
+        """Check if the message is a termination message."""
+        # check the view port here
 
-    def _check_for_error(self, chat_result: ChatResult) -> Optional[str]:
-        messages = [msg["content"] for msg in chat_result.chat_history]
-        last_message = messages[-1]
-
-        try:
-            CustomWebSurferAnswer.model_validate_json(last_message)
-        except Exception:
-            return self.error_message
-
-        return None
+        return bool(msg["content"] == "TERMINATE")
 
     def create(
-        self,
-    ) -> Callable[[str], tuple[list[PoiData], dict[str, Literal[1, 2, 3, 4, 5]]]]:
+        self, poi_manager: "PoiManager"
+    ) -> Callable[[str], str]:
         """Factory method to create a scraper function.
+
+        Args:
+            poi_manager (PoiManager): The POI manager instance for registering POIs and URLs.
 
         Returns:
             Callable that takes a URL and returns tuple of:
@@ -305,39 +243,62 @@ THE LAST ERROR MESSAGE:
             bing_api_key=os.getenv("BING_API_KEY"),
         )
 
+        # register websurfer tool
         web_surfer_tool.register(
             caller=web_surfer_agent,
             executor=assistant_agent,
         )
 
-        def scrape(url: str) -> tuple[list[PoiData], dict[str, Literal[1, 2, 3, 4, 5]]]:
-            """Scrape the URL for POI data and relevant urls."""
-            message: Optional[str] = f"Please collect all POIs and urla from {url}"
-            clear_history = True
+        # Register the functions to register POIs
+        def register_poi(name: str, description: str, category: str, location: Optional[str] = None) -> str:
 
-            while message is not None:
-                chat_result = assistant_agent.initiate_chat(
-                    web_surfer_agent,
-                    message=message,
-                    summary_method="reflection_with_llm",
-                    max_turns=3,
-                    clear_history=clear_history,
+            try:
+                poi = PoiData(
+                    name=name,
+                    description=description,
+                    category=category,
+                    location=location,
                 )
-                message = self._check_for_error(chat_result)
-                clear_history = False
+                poi_manager.register_poi(poi)
+                return f"POI registered: {poi_data['name']}"
+            except Exception as e:
+                return f"Failed to register POI: {str(e)}"
 
-            return self._transform_chat_result(chat_result)
+        register_function(
+            register_poi,
+            caller=web_surfer_agent,
+            executor=assistant_agent,
+            name="register_poi",
+            description="Register Point of Interest (POI)",
+        )
+
+        # Register the functions to register URLs with scores
+        def register_url(url: str, score: Literal[1, 2, 3, 4, 5]) -> str:
+            poi_manager.register_url(url, score)
+            return f"Link registered: {url}, AI score: {score}"
+
+        register_function(
+            register_url,
+            caller=web_surfer_agent,
+            executor=assistant_agent,
+            name="register_url",
+            description="Register new url with score",
+        )
+
+        def scrape(url: str) -> str:
+            """Scrape the URL for POI data and relevant urls."""
+            message = f"Collect all the Points of Interest (POIs) from the webpage {url}, along with any URLs that are likely to lead to additional POIs."
+
+            chat_result = assistant_agent.initiate_chat(
+                web_surfer_agent,
+                message=message,
+                summary_method="reflection_with_llm",
+                max_turns=3,
+            )
+
+            return str(chat_result.summary)
 
         return scrape
-
-    def _transform_chat_result(
-        self, chat_result: ChatResult
-    ) -> tuple[list[PoiData], dict[str, Literal[1, 2, 3, 4, 5]]]:
-        messages = [msg["content"] for msg in chat_result.chat_history]
-        last_message = messages[-1]
-
-        websurfer_answer_obj = CustomWebSurferAnswer.model_validate_json(last_message)
-        return websurfer_answer_obj.pois_found, websurfer_answer_obj.urls_found
 
 
 class PoiManager:
@@ -356,22 +317,10 @@ class PoiManager:
         self.poi_validator = poi_validator
         self.base_domain = urlparse(base_url).netloc
         self.url_queue: PriorityQueue[Link] = PriorityQueue()
-        self.pois: dict[str, dict[str, Union[str, Optional[str]]]] = {}
         self.urls_with_less_score: dict[str, int] = {}
-
-    def _register_pois(self, pois: List[PoiData]) -> None:
-        """Register the new Point of Interests (POI)."""
-        for poi in pois:
-            poi_validation_result = self.poi_validator.validate(
-                poi.name, poi.description, poi.category, poi.location
-            )
-
-            if poi_validation_result.is_valid:
-                self.pois[poi.name] = {
-                    "description": poi.description,
-                    "category": poi.category,
-                    "location": poi.location,
-                }
+        self.all_pois: dict[str, List[PoiData]] = {}
+        self._all_urls_with_scores: dict[str, list[Tuple[str, Literal[1, 2, 3, 4, 5]]]] = {}
+        self.current_url: str = ""
 
     def _add_new_links_to_queue(
         self, link: Link, min_score: Optional[int] = None
@@ -388,11 +337,27 @@ class PoiManager:
             else:
                 self.urls_with_less_score[new_link.url] = new_link.estimated_score
 
+    def register_poi(self, poi: PoiData) -> str:
+        """Register a new Point of Interest (POI)."""
+        poi_validation_result = self.poi_validator.validate(
+            poi.name, poi.description, poi.category, poi.location
+        )
+
+        if not poi_validation_result.is_valid:
+            return f"POI validation failed for: {poi.name, poi.description}"
+
+        self.all_pois.setdefault(self.current_url, []).append(poi)
+        return f"POI registered: {poi.name}, Category: {poi.category}, Location: {poi.location}"
+
+    def register_url(self, url: str, score: Literal[1, 2, 3, 4, 5]) -> str:
+        self._all_urls_with_scores.setdefault(self.current_url, []).append((url, score))
+        return f"Link registered: {url}, AI score: {score}"
+    
     def process(
         self, scraper: Scraper, min_score: Optional[int] = None
-    ) -> tuple[dict[str, dict[str, Union[str, Optional[str]]]], Site]:
+    ) -> tuple[dict[str, list[PoiData]], Site]:
         # Create scraper function
-        scrape = scraper.create()
+        scrape = scraper.create(self)
 
         # Initialize with base URL
         homepage = Link.create(parent=None, url=self.base_url, estimated_score=5)
@@ -403,22 +368,28 @@ class PoiManager:
         while not self.url_queue.empty():
             link = self.url_queue.get()
 
+            # Set the current URL
+            self.current_url = link.url
+
             # Process URL using AI
-            pois_found, urls_found = scrape(link.url)
+            scrape(link.url)
 
-            # Remove urls that are not from the same domain
-            same_domain_urls = filter_same_domain_urls(urls_found, self.base_domain)
+            # Get only the new urls that were added from the current iteration
+            try:
+                new_urls = self._all_urls_with_scores[self.current_url]
+                same_domain_urls = filter_same_domain_urls(new_urls, self.base_domain)
 
-            # Record the visit
-            link.record_visit(
-                poi_found=len(pois_found) > 0,
-                urls_found=same_domain_urls,
-            )
+                # Record the visit
+                pois_found = bool(self.all_pois.get(self.current_url, {}))
+                link.record_visit(
+                    poi_found=pois_found,
+                    urls_found=same_domain_urls,
+                )
 
-            # Register the POIs found
-            self._register_pois(pois_found)
+                # Add the new links to the queue
+                self._add_new_links_to_queue(link, min_score)
 
-            # Add the new links to the queue
-            self._add_new_links_to_queue(link, min_score)
+            except KeyError:
+                raise ValueError(f"URL {self.current_url} was not processed.")
 
-        return self.pois, homepage.site
+        return self.all_pois, homepage.site

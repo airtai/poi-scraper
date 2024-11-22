@@ -1,7 +1,9 @@
-from typing import Literal, Optional, Union
+from typing import Literal, Optional, Union, List, Tuple
 from urllib.parse import urlparse
 
 from fastagency import UI
+
+from poi_scraper.poi_types import PoiData
 
 
 def is_valid_url(url: str) -> bool:
@@ -13,13 +15,14 @@ def is_valid_url(url: str) -> bool:
 
 
 def generate_poi_markdown_table(
-    registered_pois: dict[str, dict[str, Union[str, Optional[str]]]],
+    pois: dict[str, list[PoiData]],
 ) -> str:
-    table_header = "| Sno | Name | Category | Location | Description |\n| --- | --- | --- | --- | --- |\n"
+    table_header = "| Sno | URL | Name | Category | Location | Description |\n| --- | --- | --- | --- | --- |\n"
     table_rows = "\n".join(
         [
-            f"| {i+1} | {name} | {poi['category']} | {poi['location']} | {poi['description']} |"
-            for i, (name, poi) in enumerate(registered_pois.items())
+            f"| {i+1} | {url} | {poi.name} | {poi.category} | {poi.location} | {poi.description} |"
+            for i, (url, poi_list) in enumerate(pois.items())
+            for poi in poi_list
         ]
     )
     return table_header + table_rows
@@ -43,10 +46,10 @@ def get_url_from_user(ui: UI) -> str:
 
 
 def filter_same_domain_urls(
-    urls_found: dict[str, Literal[1, 2, 3, 4, 5]], base_domain: str
+    urls_found: List[Tuple[str, Literal[1, 2, 3, 4, 5]]], base_domain: str
 ) -> dict[str, Literal[1, 2, 3, 4, 5]]:
     return {
         url: score
-        for url, score in urls_found.items()
+        for url, score in urls_found
         if urlparse(url).netloc == base_domain
     }
