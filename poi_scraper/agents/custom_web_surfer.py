@@ -38,15 +38,15 @@ Example instructions for the Web_Surfer_Tool_inner_websurfer agent:
 
     2. Scrape and Scroll (Repeat Until Done):
         - Scrape all visible Points of Interest (POIs) and URLs.
-        - Repeat this process: scrape, then scroll down, until you reach the bottom of the page or no new content loads. 
-        - If there’s a "Load More" button, click it to reveal additional content.
+        - Repeat this process: scrape, then scroll down, until you reach the bottom of the page or no new content loads.
+        - If there's a "Load More" button, click it to reveal additional content.
         - Find Relevant URLs:
             - Identify all URLs and score their relevance based on their likelihood of leading to more POIs.
 
     3. Useful commands:
         - The 'visit_page' and scroll_down' commands are enough to complete this task effectively.
-    
-    4. After ensuring you’ve collected everything, provide a final JSON object with the POIs and relevant URLs.
+
+    4. After ensuring you've collected everything, provide a final JSON object with the POIs and relevant URLs.
 
 General Guidelines:
 
@@ -72,7 +72,7 @@ POI Collection:
         "category": "Beach",
         "description": "Marina Beach is a natural urban beach in Chennai, Tamil Nadu, India, along the Bay of Bengal. It is the longest natural urban beach in India."
         }
-    
+
     - If no POI data is available, return: "The page does not contain any POI information.". You SHOULD only return this if you have thoroughly checked the entire page and are certain that no POIs are present. This is non-negotiable and you will be penalized if you return this message without checking the entire page.
 
 URL Collection:
@@ -159,15 +159,14 @@ THE LAST ERROR MESSAGE:
     def _is_full_page_visited(self) -> bool:
         viewport_current_page = self.websurfer.browser.viewport_current_page
         viewport_pages = self.websurfer.browser.viewport_pages
-        
+
         # https://github.com/microsoft/autogen/blob/main/python/packages/autogen-magentic-one/src/autogen_magentic_one/agents/file_surfer/file_surfer.py#L66
-        return viewport_current_page + 1 >= len(viewport_pages)
-    
+        return bool(viewport_current_page + 1 >= len(viewport_pages))
+
     def is_termination_msg(self, msg: dict[str, Any]) -> bool:
-        
         if not self._is_full_page_visited:
             return False
-        
+
         if (
             "content" in msg
             and msg["content"] is not None
@@ -182,13 +181,12 @@ THE LAST ERROR MESSAGE:
             return False
 
     def _get_error_message(self, chat_result: ChatResult) -> Optional[str]:
-        
         if not self._is_full_page_visited:
             return "You have not visited the entire page. Please scroll down to view more content."
-        
+
         messages = [msg["content"] for msg in chat_result.chat_history]
         last_message = messages[-1]
-        
+
         if "TERMINATE" in last_message:
             return self.error_message
 

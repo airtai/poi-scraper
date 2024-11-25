@@ -78,13 +78,12 @@ class MockScraper(Scraper):
         self.test_case = test_case
         self.first_call = True
 
-    def create(
-        self,
-    ) -> Callable[[str], str]:
+    def create(self, poi_manager: PoiManager) -> Callable[[str], str]:
         def mock_scrape(
             url: str,
-        ) -> tuple[list[PoiData], dict[str, Literal[1, 2, 3, 4, 5]]]:
+        ) -> str:
             if self.first_call:
+                # only for the first call, register the POIs and the URLs
                 self.first_call = False
 
                 pois_found: List[PoiData] = []
@@ -103,12 +102,13 @@ class MockScraper(Scraper):
                     "https://www.someother-domain.com/3": 4,
                 }
 
-                return (
-                    pois_found,
-                    urls_found,
-                )  # return the POIs and URLs for the first call
+                for poi in pois_found:
+                    poi_manager.register_poi(poi)
 
-            return [], {}  # return empty lists from the second call
+                for url, score in urls_found.items():
+                    poi_manager.register_url(url, score)
+
+            return "Successful"
 
         return mock_scrape
 
@@ -134,62 +134,44 @@ class TestPoiManager(TestCase):
 
     def test_process_flow(self) -> None:
         # Process base URL
-        pois_list, site = self.manager.process(self.mock_scrape)
-
-        assert pois_list == {
-            "name_1": {
-                "description": "Description 1",
-                "category": "Category 1",
-                "location": "Location 1",
-            },
-            "name_2": {
-                "description": "Description 2",
-                "category": "Category 2",
-                "location": "Location 2",
-            },
-            "name_3": {
-                "description": "Description 3",
-                "category": "Category 3",
-                "location": "Location 3",
-            },
+        pois, site = self.manager.process(self.mock_scrape)
+        expected_pois = {
+            "https://www.example.com": [
+                PoiData("name_1", "Description 1", "Category 1", "Location 1"),
+                PoiData("name_2", "Description 2", "Category 2", "Location 2"),
+                PoiData("name_3", "Description 3", "Category 3", "Location 3"),
+            ]
         }
 
-        expected = {
+        assert pois == expected_pois
+
+        expected_urls = {
             "https://www.example.com": 5,
             "https://www.example.com/3": 0.774,
             "https://www.example.com/4": 1.774,
             "https://www.example.com/5": 2.774,
         }
 
-        assert site.get_url_scores(decimals=3) == expected
+        assert site.get_url_scores(decimals=3) == expected_urls
 
     def test_process_flow_with_min_score(self) -> None:
         # Process base URL
-        pois_list, site = self.manager.process(self.mock_scrape, min_score=2)
-
-        assert pois_list == {
-            "name_1": {
-                "description": "Description 1",
-                "category": "Category 1",
-                "location": "Location 1",
-            },
-            "name_2": {
-                "description": "Description 2",
-                "category": "Category 2",
-                "location": "Location 2",
-            },
-            "name_3": {
-                "description": "Description 3",
-                "category": "Category 3",
-                "location": "Location 3",
-            },
+        pois, site = self.manager.process(self.mock_scrape, min_score=2)
+        expected_pois = {
+            "https://www.example.com": [
+                PoiData("name_1", "Description 1", "Category 1", "Location 1"),
+                PoiData("name_2", "Description 2", "Category 2", "Location 2"),
+                PoiData("name_3", "Description 3", "Category 3", "Location 3"),
+            ]
         }
 
-        expected = {
+        assert pois == expected_pois
+
+        expected_urls = {
             "https://www.example.com": 5,
             "https://www.example.com/3": 0.835,
             "https://www.example.com/4": 1.835,
             "https://www.example.com/5": 2.835,
         }
 
-        assert site.get_url_scores(decimals=3) == expected
+        assert site.get_url_scores(decimals=3) == expected_urls

@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Union, List, Tuple
+from typing import List, Literal, Tuple
 from urllib.parse import urlparse
 
 from fastagency import UI
@@ -49,7 +49,5 @@ def filter_same_domain_urls(
     urls_found: List[Tuple[str, Literal[1, 2, 3, 4, 5]]], base_domain: str
 ) -> dict[str, Literal[1, 2, 3, 4, 5]]:
     return {
-        url: score
-        for url, score in urls_found
-        if urlparse(url).netloc == base_domain
+        url: score for url, score in urls_found if urlparse(url).netloc == base_domain
     }

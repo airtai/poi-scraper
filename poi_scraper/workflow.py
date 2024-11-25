@@ -24,7 +24,9 @@ wf = AutoGenWorkflows()
 @wf.register(name="poi_scraper", description="POI scraper chat")  # type: ignore[misc]
 def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
     # Get valid URL from user
-    base_url = get_url_from_user(ui)  # "https://www.medulinriviera.info"
+    base_url = get_url_from_user(ui)
+    # base_url = "https://www.infofazana.hr/en"
+    # base_url = "www.medulinriviera.info"
 
     # Initialize POI manager
     poi_validator = ValidatePoiAgent(llm_config=llm_config)
@@ -34,9 +36,9 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
     scraper = Scraper(llm_config)
 
     # Process
-    pois_list, site = poi_manager.process(scraper)
+    pois, site = poi_manager.process(scraper, 5)
 
-    table = generate_poi_markdown_table(pois_list)
+    table = generate_poi_markdown_table(pois)
     ui.text_message(
         sender="Workflow",
         recipient="User",

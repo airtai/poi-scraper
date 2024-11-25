@@ -11,7 +11,7 @@ class TestFilterSameDomainUrls(unittest.TestCase):
             ("http://example.com/page2", 2),
             ("http://otherdomain.com/page1", 3),
         ]
-        
+
         expected = {
             "http://example.com/page1": 1,
             "http://example.com/page2": 2,

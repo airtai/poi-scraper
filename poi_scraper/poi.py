@@ -3,19 +3,20 @@ import os
 import statistics
 from dataclasses import dataclass, field
 from queue import PriorityQueue
-from typing import Any, Callable, List, Literal, Optional, Union, Tuple
+from typing import Any, Callable, List, Literal, Optional, Tuple
 from urllib.parse import urlparse
 
 from autogen import AssistantAgent, register_function
-from autogen.agentchat.chat import ChatResult
+from fastagency.logging import get_logger
 
 from poi_scraper.agents.custom_web_surfer import CustomWebSurferTool
 from poi_scraper.poi_types import (
-    CustomWebSurferAnswer,
     PoiData,
     ValidatePoiAgentProtocol,
 )
 from poi_scraper.utils import filter_same_domain_urls
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -208,9 +209,7 @@ Termination:
 
         return bool(msg["content"] == "TERMINATE")
 
-    def create(
-        self, poi_manager: "PoiManager"
-    ) -> Callable[[str], str]:
+    def create(self, poi_manager: "PoiManager") -> Callable[[str], str]:
         """Factory method to create a scraper function.
 
         Args:
@@ -250,8 +249,9 @@ Termination:
         )
 
         # Register the functions to register POIs
-        def register_poi(name: str, description: str, category: str, location: Optional[str] = None) -> str:
-
+        def register_poi(
+            name: str, description: str, category: str, location: Optional[str] = None
+        ) -> str:
             try:
                 poi = PoiData(
                     name=name,
@@ -260,9 +260,10 @@ Termination:
                     location=location,
                 )
                 poi_manager.register_poi(poi)
-                return f"POI registered: {poi_data['name']}"
+                return f"POI registered: {name}"
             except Exception as e:
-                return f"Failed to register POI: {str(e)}"
+                logger.info(f"Failed to register POI: {e!s}")
+                return f"Failed to register POI: {e!s}"
 
         register_function(
             register_poi,
@@ -319,7 +320,9 @@ class PoiManager:
         self.url_queue: PriorityQueue[Link] = PriorityQueue()
         self.urls_with_less_score: dict[str, int] = {}
         self.all_pois: dict[str, List[PoiData]] = {}
-        self._all_urls_with_scores: dict[str, list[Tuple[str, Literal[1, 2, 3, 4, 5]]]] = {}
+        self._all_urls_with_scores: dict[
+            str, list[Tuple[str, Literal[1, 2, 3, 4, 5]]]
+        ] = {}
         self.current_url: str = ""
 
     def _add_new_links_to_queue(
@@ -352,7 +355,7 @@ class PoiManager:
     def register_url(self, url: str, score: Literal[1, 2, 3, 4, 5]) -> str:
         self._all_urls_with_scores.setdefault(self.current_url, []).append((url, score))
         return f"Link registered: {url}, AI score: {score}"
-    
+
     def process(
         self, scraper: Scraper, min_score: Optional[int] = None
     ) -> tuple[dict[str, list[PoiData]], Site]:
@@ -375,21 +378,17 @@ class PoiManager:
             scrape(link.url)
 
             # Get only the new urls that were added from the current iteration
-            try:
-                new_urls = self._all_urls_with_scores[self.current_url]
-                same_domain_urls = filter_same_domain_urls(new_urls, self.base_domain)
+            new_urls = self._all_urls_with_scores.get(self.current_url, [])
+            same_domain_urls = filter_same_domain_urls(new_urls, self.base_domain)
 
-                # Record the visit
-                pois_found = bool(self.all_pois.get(self.current_url, {}))
-                link.record_visit(
-                    poi_found=pois_found,
-                    urls_found=same_domain_urls,
-                )
+            # Record the visit
+            pois_found = bool(self.all_pois.get(self.current_url, {}))
+            link.record_visit(
+                poi_found=pois_found,
+                urls_found=same_domain_urls,
+            )
 
-                # Add the new links to the queue
-                self._add_new_links_to_queue(link, min_score)
-
-            except KeyError:
-                raise ValueError(f"URL {self.current_url} was not processed.")
+            # Add the new links to the queue
+            self._add_new_links_to_queue(link, min_score)
 
         return self.all_pois, homepage.site
