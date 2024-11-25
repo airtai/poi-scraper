@@ -168,7 +168,7 @@ class Scraper:
     """A scraper factory that creates a callable scraper function."""
 
     llm_config: dict[str, Any]
-    system_message: str = """You are a web surfer agent tasked with collecting Points of Interest (POIs) from a given webpage.
+    system_message: str = """You are a web surfer agent tasked with collecting Points of Interest (POIs) and URLs from a given webpage.
 
 Instructions:
     1. Scrape the webpage:

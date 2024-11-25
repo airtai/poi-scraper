@@ -28,6 +28,12 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
     # base_url = "https://www.infofazana.hr/en"
     # base_url = "www.medulinriviera.info"
 
+    ui.text_message(
+        sender="Workflow",
+        recipient="User",
+        body=f"Starting POI collection for {base_url}.",
+    )
+
     # Initialize POI manager
     poi_validator = ValidatePoiAgent(llm_config=llm_config)
     poi_manager = PoiManager(base_url, poi_validator)
