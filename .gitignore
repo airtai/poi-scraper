@@ -1,3 +1,5 @@
 # Ignore cache directories
 .cache/
 **/__pycache__/
+*.csv
+*.ipynb
