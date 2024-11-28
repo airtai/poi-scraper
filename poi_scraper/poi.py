@@ -5,7 +5,9 @@ from dataclasses import dataclass, field
 from queue import PriorityQueue
 from typing import Any, Callable, List, Literal, Optional, Tuple
 from urllib.parse import urlparse
+from pathlib import Path
 
+import pandas as pd
 from autogen import AssistantAgent, register_function
 from fastagency.logging import get_logger
 
@@ -340,6 +342,28 @@ class PoiManager:
             else:
                 self.urls_with_less_score[new_link.url] = new_link.estimated_score
 
+    def _to_dataframe(self, pois: dict[str, list[PoiData]]) -> pd.DataFrame:
+        data = []
+        for url, pois in pois.items():
+            for poi in pois:
+                data.append({
+                    "url": url,
+                    "name": poi.name,
+                    "description": poi.description,
+                    "category": poi.category,
+                    "location": poi.location,
+                })
+        return pd.DataFrame(data)
+    
+    def _update_dataframe(self, path: Path, pois: dict[str, list[PoiData]]) -> None:
+        if path.exists():
+            existing = pd.read_csv(path)
+        else:
+            existing = pd.DataFrame()
+        new = self._to_dataframe(pois)
+        combined = pd.concat([existing, new]).drop_duplicates()
+        combined.to_csv(path, index=False)
+    
     def register_poi(self, poi: PoiData) -> str:
         """Register a new Point of Interest (POI)."""
         poi_validation_result = self.poi_validator.validate(
@@ -350,6 +374,10 @@ class PoiManager:
             return f"POI validation failed for: {poi.name, poi.description}"
 
         self.all_pois.setdefault(self.current_url, []).append(poi)
+
+        poi_dict: dict[str, list[PoiData]] = {self.current_url: [poi]}
+        self._update_dataframe(Path("poi_data.csv"), poi_dict)
+        
         return f"POI registered: {poi.name}, Category: {poi.category}, Location: {poi.location}"
 
     def register_url(self, url: str, score: Literal[1, 2, 3, 4, 5]) -> str:
