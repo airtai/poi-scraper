@@ -1,11 +1,10 @@
 import os
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 from fastagency import UI
 from fastagency.runtimes.autogen import AutoGenWorkflows
-
 
 from poi_scraper.agents import ValidatePoiAgent
 from poi_scraper.poi import PoiManager, Scraper
@@ -63,15 +62,21 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
     return f"POI collection completed for {base_url}."
 
 
-
 @wf.register(name="show_poi", description="Show scraped POI's")  # type: ignore[misc]
 def show_poi_workflow(ui: UI, params: dict[str, Any]) -> str:
-
     path = Path("poi_data.csv")
     # load the pandas dataframe from disk
 
     while True:
-        df = pd.read_csv(path)
+        try:
+            df = pd.read_csv(path)
+        except FileNotFoundError:
+            ui.text_message(
+                sender="Workflow",
+                recipient="User",
+                body="No POI's found. Please run the scraper first.",
+            )
+            break
 
         # generate markdown table
         table = df.to_markdown()
@@ -92,3 +97,5 @@ def show_poi_workflow(ui: UI, params: dict[str, Any]) -> str:
 
         if answer == "No":
             break
+
+    return "POI's shown successfully."
