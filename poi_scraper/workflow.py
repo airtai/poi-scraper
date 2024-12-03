@@ -8,7 +8,7 @@ from fastagency.runtimes.autogen import AutoGenWorkflows
 
 from poi_scraper.agents import ValidatePoiAgent
 from poi_scraper.poi import PoiManager, Scraper
-from poi_scraper.utils import generate_poi_markdown_table, get_url_from_user
+from poi_scraper.utils import generate_poi_markdown_table, get_name_and_base_url
 
 llm_config = {
     "config_list": [
@@ -26,14 +26,14 @@ wf = AutoGenWorkflows()
 @wf.register(name="poi_scraper", description="POI scraper chat")  # type: ignore[misc]
 def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
     # Get valid URL from user
-    base_url = get_url_from_user(ui)
+    name, base_url = get_name_and_base_url(ui)
     # base_url = "https://www.infofazana.hr/en"
     # base_url = "www.medulinriviera.info"
 
     ui.text_message(
         sender="Workflow",
         recipient="User",
-        body=f"Starting POI collection for {base_url}.",
+        body=f"Starting POI collection for name: {name} and base_url: {base_url}.",
     )
 
     # Initialize POI manager

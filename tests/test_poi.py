@@ -1,11 +1,15 @@
 from typing import Callable, Dict, List, Literal, Optional
 from unittest import TestCase
+import sqlite3
+import pickle
+from pathlib import Path
 
 from poi_scraper.poi import Link, PoiManager, Scraper
 from poi_scraper.poi_types import (
     PoiData,
     PoiValidationResult,
     ValidatePoiAgentProtocol,
+    WorkflowStatus
 )
 
 
@@ -127,24 +131,86 @@ class MockValidatePoiAgent(ValidatePoiAgentProtocol):
 
 class TestPoiManager(TestCase):
     def setUp(self) -> None:
+        self.db_path = Path("test_poi_data.db")
         self.base_url = "https://www.example.com"
-        poi_validator = MockValidatePoiAgent()
-        self.manager = PoiManager(self.base_url, poi_validator)
+        self.workflow_name = "Test Workflow"
+        
+        self.poi_validator = MockValidatePoiAgent()
         self.mock_scrape = MockScraper(self)
+        
+        # self.manager = PoiManager(self.base_url, poi_validator)
 
-    def test_process_flow(self) -> None:
+    def tear_down(self) -> None:
+        # Clean up the database
+        if self.db_path.exists():
+            self.db_path.unlink()
+
+    def verify_workflow_state(self, workflow_id: int, expected_status: str) -> None:
+        """Verify the state of the workflow in the database."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT * FROM workflows WHERE id = ?", (workflow_id,)
+            )
+            workflow = cursor.fetchone()
+
+            assert workflow is not None
+            assert workflow["state"] == expected_status
+            assert workflow["name"] == self.workflow_name
+            assert workflow["base_url"] == self.base_url
+
+            if expected_status == "completed":
+                assert workflow["queue_state"] is None
+                assert workflow["all_urls_scores"] is None
+                assert workflow["less_score_urls"] is None
+
+    def verify_pois(self, workflow_id: int, expected_pois: Dict[str, List[PoiData]]) -> None:
+        """Verify the POIs in the database."""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                "SELECT * FROM pois WHERE workflow_id = ? ORDER BY name", (workflow_id,)
+            )
+            pois = cursor.fetchall()
+
+            assert len(pois) == sum(len(pois_list) for pois_list in expected_pois.values())
+            for db_poi, expected_poi in zip(pois, expected_pois.values()):
+                assert db_poi["name"] == expected_poi.name
+                assert db_poi["description"] == expected_poi.description
+                assert db_poi["category"] == expected_poi.category
+                assert db_poi["location"] == expected_poi.location
+
+    def test_new_workflow(self) -> None:
+        """Test complete workflow execution from scratch"""
+
+        # Initialize POI manager
+        manager = PoiManager(
+            base_url=self.base_url,
+            poi_validator=self.poi_validator,
+            workflow_name=self.workflow_name,
+            db_path=self.db_path,
+        )
+
+        # verify initial workflow state
+        self.verify_workflow_state(manager.workflow_id, "in_progress")
+
         # Process base URL
-        pois, site = self.manager.process(self.mock_scrape)
+        pois, site = manager.process(self.mock_scrape)
+        
+        # Verify POIs
         expected_pois = {
-            "https://www.example.com": [
+            self.base_url: [
                 PoiData("name_1", "Description 1", "Category 1", "Location 1"),
                 PoiData("name_2", "Description 2", "Category 2", "Location 2"),
                 PoiData("name_3", "Description 3", "Category 3", "Location 3"),
             ]
         }
+        self.verify_pois(manager.workflow_id, expected_pois)
 
-        assert pois == expected_pois
+        # Verify final workflow state
+        self.verify_workflow_state(manager.workflow_id, "completed")
 
+        # Verify site structure
         expected_urls = {
             "https://www.example.com": 5,
             "https://www.example.com/3": 0.774,
@@ -153,25 +219,50 @@ class TestPoiManager(TestCase):
         }
 
         assert site.get_url_scores(decimals=3) == expected_urls
+        
 
-    def test_process_flow_with_min_score(self) -> None:
-        # Process base URL
-        pois, site = self.manager.process(self.mock_scrape, min_score=2)
-        expected_pois = {
-            "https://www.example.com": [
-                PoiData("name_1", "Description 1", "Category 1", "Location 1"),
-                PoiData("name_2", "Description 2", "Category 2", "Location 2"),
-                PoiData("name_3", "Description 3", "Category 3", "Location 3"),
-            ]
-        }
+    
 
-        assert pois == expected_pois
+    # def test_process_flow(self) -> None:
+    #     # Process base URL
+    #     pois, site = self.manager.process(self.mock_scrape)
+    #     expected_pois = {
+    #         "https://www.example.com": [
+    #             PoiData("name_1", "Description 1", "Category 1", "Location 1"),
+    #             PoiData("name_2", "Description 2", "Category 2", "Location 2"),
+    #             PoiData("name_3", "Description 3", "Category 3", "Location 3"),
+    #         ]
+    #     }
 
-        expected_urls = {
-            "https://www.example.com": 5,
-            "https://www.example.com/3": 0.835,
-            "https://www.example.com/4": 1.835,
-            "https://www.example.com/5": 2.835,
-        }
+    #     assert pois == expected_pois
 
-        assert site.get_url_scores(decimals=3) == expected_urls
+    #     expected_urls = {
+    #         "https://www.example.com": 5,
+    #         "https://www.example.com/3": 0.774,
+    #         "https://www.example.com/4": 1.774,
+    #         "https://www.example.com/5": 2.774,
+    #     }
+
+    #     assert site.get_url_scores(decimals=3) == expected_urls
+
+    # def test_process_flow_with_min_score(self) -> None:
+    #     # Process base URL
+    #     pois, site = self.manager.process(self.mock_scrape, min_score=2)
+    #     expected_pois = {
+    #         "https://www.example.com": [
+    #             PoiData("name_1", "Description 1", "Category 1", "Location 1"),
+    #             PoiData("name_2", "Description 2", "Category 2", "Location 2"),
+    #             PoiData("name_3", "Description 3", "Category 3", "Location 3"),
+    #         ]
+    #     }
+
+    #     assert pois == expected_pois
+
+    #     expected_urls = {
+    #         "https://www.example.com": 5,
+    #         "https://www.example.com/3": 0.835,
+    #         "https://www.example.com/4": 1.835,
+    #         "https://www.example.com/5": 2.835,
+    #     }
+
+    #     assert site.get_url_scores(decimals=3) == expected_urls

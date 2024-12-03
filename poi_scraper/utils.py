@@ -32,21 +32,27 @@ def generate_poi_markdown_table(
     return table_header + table_rows
 
 
-def get_url_from_user(ui: UI) -> str:
+def get_name_and_base_url(ui: UI) -> Tuple[str, str]:
     while True:
-        webpage_url = ui.text_input(
+        base_url = ui.text_input(
             sender="Workflow",
             recipient="User",
             prompt="I can collect Points of Interest (POI) data from any webpage—just share the link with me!",
         )
-        if is_valid_url(webpage_url):
+        if is_valid_url(base_url):
             break
         ui.text_message(
             sender="Workflow",
             recipient="User",
             body="The provided URL is not valid. Please enter a valid URL. Example: https://www.example.com",
         )
-    return str(webpage_url)
+
+    name = ui.text_input(
+        sender="Workflow",
+        recipient="User",
+        prompt="Great! Now, please provide a name for the task. It will help you identify the task and resume it later.",
+    )
+    return name, str(base_url)
 
 
 def filter_same_domain_urls(
