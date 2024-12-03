@@ -3,12 +3,16 @@ from pathlib import Path
 from typing import Callable, Dict, List, Literal, Optional
 from unittest import TestCase
 
-from poi_scraper.poi import Link, PoiDatabase, PoiManager, Scraper
+from poi_scraper.database import PoiDatabase
+from poi_scraper.poi_manager import PoiManager
 from poi_scraper.poi_types import (
     PoiData,
+    PoiManagerProtocol,
     PoiValidationResult,
     ValidatePoiAgentProtocol,
 )
+from poi_scraper.scraper import Scraper
+from poi_scraper.statistics import Link
 
 
 class TestLinkCreation:
@@ -92,7 +96,7 @@ class MockScraper(Scraper):
         self.test_case = test_case
         self.first_call = True
 
-    def create(self, poi_manager: PoiManager) -> Callable[[str], str]:
+    def create(self, poi_manager: PoiManagerProtocol) -> Callable[[str], str]:
         def mock_scrape(
             url: str,
         ) -> str:
@@ -132,7 +136,7 @@ class ResumeMockScraper(Scraper):
         """Mock scraper that handles two batches of POIs."""
         self.test_case = test_case
 
-    def create(self, poi_manager: PoiManager) -> Callable[[str], str]:
+    def create(self, poi_manager: PoiManagerProtocol) -> Callable[[str], str]:
         def mock_scrape(url: str) -> str:
             self.first_call = False
             poi_manager.register_poi(

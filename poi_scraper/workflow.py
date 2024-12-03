@@ -7,7 +7,8 @@ from fastagency import UI
 from fastagency.runtimes.autogen import AutoGenWorkflows
 
 from poi_scraper.agents import ValidatePoiAgent
-from poi_scraper.poi import PoiManager, Scraper
+from poi_scraper.poi_manager import PoiManager
+from poi_scraper.scraper import Scraper
 from poi_scraper.utils import (
     generate_poi_markdown_table,
     get_base_url,
