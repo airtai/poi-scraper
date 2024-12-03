@@ -38,7 +38,9 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
 
     # Initialize POI manager
     poi_validator = ValidatePoiAgent(llm_config=llm_config)
-    poi_manager = PoiManager(base_url, poi_validator)
+    poi_manager = PoiManager(
+        base_url=base_url, poi_validator=poi_validator, workflow_name=name
+    )
 
     # Create scraper factory
     scraper = Scraper(llm_config)

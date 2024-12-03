@@ -1,15 +1,15 @@
 import math
 import os
-import statistics
-from dataclasses import dataclass, field
-from pathlib import Path
-import sqlite3
 import pickle
+import sqlite3
+import statistics
 from contextlib import contextmanager
-from typing import Any, Callable, List, Literal, Optional, Tuple, Dict
+from dataclasses import dataclass, field
+from itertools import groupby
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterator, List, Literal, Optional, Tuple
 from urllib.parse import urlparse
 
-import pandas as pd
 from autogen import AssistantAgent, register_function
 from fastagency.logging import get_logger
 
@@ -21,6 +21,7 @@ from poi_scraper.poi_types import (
 from poi_scraper.utils import filter_same_domain_urls
 
 logger = get_logger(__name__)
+
 
 @dataclass
 class Site:
@@ -305,34 +306,34 @@ Termination:
         return scrape
 
 
-
 @dataclass
 class WorkflowState:
-    """Contains the complete state of a workflow"""
+    """Contains the complete state of a workflow."""
+
     urls: List[Link]
     homepage: Link
     all_urls_with_scores: Dict[str, List[Tuple[str, Literal[1, 2, 3, 4, 5]]]]
     urls_with_less_score: Dict[str, int]
 
+
 class PoiDatabase:
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: Optional[str] = None) -> None:
         """Initialize the POI database."""
         db_path = db_path or "poi_data.db"
         self.db_path = Path(db_path)
         self._init_db()
 
     @contextmanager
-    def get_connection(self):
+    def get_connection(self) -> Iterator[sqlite3.Connection]:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         try:
             yield conn
         finally:
             conn.close()
-    
-    def _init_db(self):
+
+    def _init_db(self) -> None:
         """Initialize the database."""
-        
         create_tables_sql = """
         -- Workflows table with status and queue state
         CREATE TABLE IF NOT EXISTS workflows (
@@ -359,55 +360,80 @@ class PoiDatabase:
         );
 
         -- Create index for faster POI lookups
-        CREATE INDEX IF NOT EXISTS idx_pois_workflow 
-        ON pois(workflow_id, name);
+        CREATE INDEX IF NOT EXISTS idx_pois_workflow ON pois(workflow_id, name);
         """
         with self.get_connection() as conn:
             for statement in create_tables_sql.split(";"):
                 if statement.strip():
                     conn.execute(statement)
             conn.commit()
-    
-    def create_or_get_workflow(self, name: str, base_url: str) -> Tuple[int, Optional[WorkflowState]]:
-        """Create a new workflow or get existing one with all state"""
+
+    def create_or_get_workflow(
+        self, name: str, base_url: str
+    ) -> Tuple[int, Optional[WorkflowState]]:
+        """Create a new workflow or get existing one with all state."""
         with self.get_connection() as conn:
-            cursor = conn.execute("SELECT id, queue_state, all_urls_scores, less_score_urls FROM workflows WHERE name = ?", (name,))
+            cursor = conn.execute(
+                "SELECT id, queue_state, all_urls_scores, less_score_urls FROM workflows WHERE name = ?",
+                (name,),
+            )
             workflow = cursor.fetchone()
 
             if workflow:
                 if workflow["queue_state"] is not None:
-                    queue_state = pickle.loads(workflow["queue_state"])
-                    url_scores = pickle.loads(workflow["all_urls_scores"]) if workflow["all_urls_scores"] else {}
-                    less_score_urls = pickle.loads(workflow["less_score_urls"]) if workflow["less_score_urls"] else {}
+                    queue_state = pickle.loads(  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                        workflow["queue_state"]
+                    )
+                    url_scores = (
+                        pickle.loads(  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                            workflow["all_urls_scores"]
+                        )
+                        if workflow["all_urls_scores"]
+                        else {}
+                    )
+                    less_score_urls = (
+                        pickle.loads(  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                            workflow["less_score_urls"]
+                        )
+                        if workflow["less_score_urls"]
+                        else {}
+                    )
 
                     return workflow["id"], WorkflowState(
-                        queue = queue_state[0], 
+                        urls=queue_state[0],
                         homepage=queue_state[1],
-                        all_urls_with_scores = url_scores,
-                        urls_with_less_score = less_score_urls
+                        all_urls_with_scores=url_scores,
+                        urls_with_less_score=less_score_urls,
                     )
                 return workflow["id"], None
 
+            # Create new workflow if it doesn't exist
             cursor = conn.execute(
-                """INSERT INTO workflows 
-                   (name, base_url, status, queue_state, all_urls_scores, less_score_urls) 
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (name, base_url, "in_progress", None, None, None)
+                """INSERT INTO workflows (
+                        name,base_url, status, queue_state, all_urls_scores, less_score_urls
+                    ) VALUES (?, ?, ?, ?, ?, ?)""",
+                (name, base_url, "in_progress", None, None, None),
             )
-            return cursor.lastrowid, None
+
+            conn.commit()
+            return cursor.lastrowid, None  # type: ignore
 
     def save_workflow_state(self, workflow_id: int, state: WorkflowState) -> None:
         """Save the state of the workflow in the database."""
         with self.get_connection() as conn:
-            queue_state = pickle.dumps((state.urls, state.homepage))
-            url_scores = pickle.dumps(state.all_urls_with_scores)
-            less_score_urls = pickle.dumps(state.urls_with_less_score)
+            queue_state = pickle.dumps(  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                (state.urls, state.homepage)
+            )
+            url_scores = pickle.dumps(  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                state.all_urls_with_scores
+            )
+            less_score_urls = pickle.dumps(  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                state.urls_with_less_score
+            )
 
             conn.execute(
-                """UPDATE workflows 
-                    SET queue_state = ?, all_urls_scores = ?, less_score_urls = ? 
-                    WHERE id = ?""",
-                (queue_state, url_scores, less_score_urls, workflow_id)
+                """UPDATE workflows SET queue_state = ?, all_urls_scores = ?, less_score_urls = ? WHERE id = ?""",
+                (queue_state, url_scores, less_score_urls, workflow_id),
             )
             conn.commit()
 
@@ -427,15 +453,20 @@ class PoiDatabase:
 
         with self.get_connection() as conn:
             conn.execute(
-                """INSERT INTO pois 
-                    (workflow_id, url, name, description, category, location) 
-                    VALUES (?, ?, ?, ?, ?, ?)""",
-                (workflow_id, url, poi.name, poi.description, poi.category, poi.location),
+                """INSERT INTO pois (workflow_id, url, name, description, category, location) VALUES (?, ?, ?, ?, ?, ?)""",
+                (
+                    workflow_id,
+                    url,
+                    poi.name,
+                    poi.description,
+                    poi.category,
+                    poi.location,
+                ),
             )
             conn.commit()
 
     def get_all_pois(self, workflow_id: int) -> Dict[str, List[PoiData]]:
-        """Retrieve all POIs for a workflow grouped by URL"""
+        """Retrieve all POIs for a workflow grouped by URL."""
         with self.get_connection() as conn:
             cursor = conn.execute(
                 "SELECT url, name, description, category, location FROM pois WHERE workflow_id = ? ORDER BY url",
@@ -443,27 +474,41 @@ class PoiDatabase:
             )
             pois = cursor.fetchall()
 
-        return {
-            url: [PoiData(**poi) for poi in pois]
-            for url, pois in groupby(pois, key=lambda x: x["url"])
-        }
+        ret_val = {}
+        # Group POIs by URL
+        for url, group_pois in groupby(pois, key=lambda x: x["url"]):
+            ret_val[url] = [
+                PoiData(
+                    name=poi["name"],
+                    description=poi["description"],
+                    category=poi["category"],
+                    location=poi["location"],
+                )
+                for poi in group_pois
+            ]
+        return ret_val
 
     def mark_workflow_completed(self, workflow_id: int) -> None:
-        """Mark workflow as completed and clear queue state"""
+        """Mark workflow as completed and clear queue state."""
         with self.get_connection() as conn:
             conn.execute(
-                """UPDATE workflows SET status = 'completed', 
+                """UPDATE workflows SET status = 'completed',
                     queue_state = NULL,
                     all_urls_scores = NULL,
-                    less_score_urls = NULL 
-                    WHERE id = ?""",
+                    less_score_urls = NULL WHERE id = ?""",
                 (workflow_id,),
             )
             conn.commit()
 
 
 class PoiManager:
-    def __init__(self, base_url: str, poi_validator: ValidatePoiAgentProtocol, workflow_name: str, db_path: Optional[str] = None):
+    def __init__(
+        self,
+        base_url: str,
+        poi_validator: ValidatePoiAgentProtocol,
+        workflow_name: str,
+        db_path: Optional[str] = None,
+    ):
         """Initialize the POIManager with a base URL.
 
         This constructor sets up the initial state of the POIManager, including
@@ -474,6 +519,7 @@ class PoiManager:
             base_url (str): The base URL to start managing points of interest from.
             poi_validator (ValidatePoiAgentProtocol): The agent to validate points of interest.
             workflow_name (str): The name of the workflow.
+            db_path (Optional[str], optional): The path to the database file. Defaults to None.
         """
         self.base_url = base_url
         self.base_domain = urlparse(base_url).netloc
@@ -481,24 +527,26 @@ class PoiManager:
         self.db = PoiDatabase(db_path)
 
         # Initialize or resume workflow with all state
-        self.workflow_id, state = self.db.create_or_get_workflow(workflow_name, base_url)
+        self.workflow_id, state = self.db.create_or_get_workflow(
+            workflow_name, base_url
+        )
 
         if state:
             self.urls = state.urls
             self.homepage = state.homepage
             self._all_urls_with_scores = state.all_urls_with_scores
             self.urls_with_less_score = state.urls_with_less_score
-        
+
         else:
             self.homepage = Link.create(parent=None, url=base_url, estimated_score=5)
             self.urls = [self.homepage]
             self._all_urls_with_scores = {}
             self.urls_with_less_score = {}
-            self._save_state()
+            self._save_state_in_db()
 
         self.current_url = ""
 
-    def _save_state(self):
+    def _save_state_in_db(self) -> None:
         # Save new workflow state in the database
         self.db.save_workflow_state(
             self.workflow_id,
@@ -506,13 +554,11 @@ class PoiManager:
                 urls=self.urls,
                 homepage=self.homepage,
                 all_urls_with_scores=self._all_urls_with_scores,
-                urls_with_less_score=self.urls_with_less_score
-            )
+                urls_with_less_score=self.urls_with_less_score,
+            ),
         )
 
-    def _add_url(
-        self, link: Link, min_score: Optional[int] = None
-    ) -> None:
+    def _add_url(self, link: Link, min_score: Optional[int] = None) -> None:
         """Add unvisited links to queue if they meet score threshold."""
         if link.visited or link.url in {url.url for url in self.urls}:
             return
@@ -522,7 +568,7 @@ class PoiManager:
 
             # Keep urls sorted by score (descending)
             self.urls.sort(key=lambda x: x.score, reverse=True)
-        
+
         else:
             self.urls_with_less_score[link.url] = link.estimated_score
 
@@ -541,18 +587,17 @@ class PoiManager:
 
         # Add POI to the database
         self.db.add_poi(self.workflow_id, self.current_url, poi)
-        
+
         return f"POI registered: {poi.name}, Category: {poi.category}, Location: {poi.location}"
 
     def register_url(self, url: str, score: Literal[1, 2, 3, 4, 5]) -> str:
-        """Register a new URL with its score"""
+        """Register a new URL with its score."""
         self._all_urls_with_scores.setdefault(self.current_url, []).append((url, score))
         return f"Link registered: {url}, AI score: {score}"
 
     def process(
         self, scraper: Scraper, min_score: Optional[int] = None
     ) -> Tuple[Dict[str, List[PoiData]], Site]:
-        
         # Create scraper function
         scrape = scraper.create(self)
         site = self.homepage.site
@@ -585,7 +630,7 @@ class PoiManager:
                 self._add_url(new_link, min_score)
 
             # Save workflow state after each iteration to database
-            self._save_state()
+            self._save_state_in_db()
 
         # Mark workflow as completed in the database
         self.db.mark_workflow_completed(self.workflow_id)
