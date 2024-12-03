@@ -1,6 +1,6 @@
 import math
 import os
-import pickle
+import pickle  # nosec B403
 import statistics
 from dataclasses import dataclass, field
 from itertools import groupby
@@ -369,18 +369,21 @@ class PoiDatabase:
 
             if workflow:
                 if workflow["queue_state"] is not None:
-                    queue_state = pickle.loads(  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                    # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                    queue_state = pickle.loads(  # nosec B301
                         workflow["queue_state"]
                     )
                     url_scores = (
-                        pickle.loads(  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                        # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                        pickle.loads(  # nosec B301
                             workflow["all_urls_scores"]
                         )
                         if workflow["all_urls_scores"]
                         else {}
                     )
                     less_score_urls = (
-                        pickle.loads(  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                        # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                        pickle.loads(  # nosec B301
                             workflow["less_score_urls"]
                         )
                         if workflow["less_score_urls"]
