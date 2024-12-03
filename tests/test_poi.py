@@ -160,7 +160,7 @@ class TestPoiManager(TestCase):
             base_url=self.base_url,
             poi_validator=self.poi_validator,
             workflow_name=self.workflow_name,
-            db_path=str(self.db_path),
+            db_path=self.db_path,
         )
 
     def tearDown(self) -> None:
@@ -192,7 +192,7 @@ class TestPoiManager(TestCase):
     ) -> None:
         """Verify the POIs in the database."""
         # Get POIs from database
-        db = PoiDatabase(str(self.db_path))
+        db = PoiDatabase(self.db_path)
         actual_pois = db.get_all_pois(workflow_id)
 
         # Compare with expected POIs
@@ -236,7 +236,7 @@ class TestPoiManager(TestCase):
             base_url=self.base_url,
             poi_validator=self.poi_validator,
             workflow_name=self.workflow_name,
-            db_path=str(self.db_path),
+            db_path=self.db_path,
         )
 
         resume_mock_scraper = ResumeMockScraper(self)

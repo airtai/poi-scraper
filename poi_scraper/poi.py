@@ -1,13 +1,11 @@
 import math
 import os
 import pickle
-import sqlite3
 import statistics
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from itertools import groupby
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Literal, Optional, Tuple
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 from urllib.parse import urlparse
 
 from autogen import AssistantAgent, register_function
@@ -18,7 +16,7 @@ from poi_scraper.poi_types import (
     PoiData,
     ValidatePoiAgentProtocol,
 )
-from poi_scraper.utils import filter_same_domain_urls
+from poi_scraper.utils import filter_same_domain_urls, get_connection
 
 logger = get_logger(__name__)
 
@@ -317,20 +315,10 @@ class WorkflowState:
 
 
 class PoiDatabase:
-    def __init__(self, db_path: Optional[str] = None) -> None:
+    def __init__(self, db_path: Path) -> None:
         """Initialize the POI database."""
-        db_path = db_path or "poi_data.db"
-        self.db_path = Path(db_path)
+        self.db_path = db_path
         self._init_db()
-
-    @contextmanager
-    def get_connection(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        try:
-            yield conn
-        finally:
-            conn.close()
 
     def _init_db(self) -> None:
         """Initialize the database."""
@@ -362,7 +350,7 @@ class PoiDatabase:
         -- Create index for faster POI lookups
         CREATE INDEX IF NOT EXISTS idx_pois_workflow ON pois(workflow_id, name);
         """
-        with self.get_connection() as conn:
+        with get_connection(self.db_path) as conn:
             for statement in create_tables_sql.split(";"):
                 if statement.strip():
                     conn.execute(statement)
@@ -372,7 +360,7 @@ class PoiDatabase:
         self, name: str, base_url: str
     ) -> Tuple[int, Optional[WorkflowState]]:
         """Create a new workflow or get existing one with all state."""
-        with self.get_connection() as conn:
+        with get_connection(self.db_path) as conn:
             cursor = conn.execute(
                 "SELECT id, queue_state, all_urls_scores, less_score_urls FROM workflows WHERE name = ?",
                 (name,),
@@ -420,7 +408,7 @@ class PoiDatabase:
 
     def save_workflow_state(self, workflow_id: int, state: WorkflowState) -> None:
         """Save the state of the workflow in the database."""
-        with self.get_connection() as conn:
+        with get_connection(self.db_path) as conn:
             queue_state = pickle.dumps(  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
                 (state.urls, state.homepage)
             )
@@ -439,7 +427,7 @@ class PoiDatabase:
 
     def is_poi_deplicate(self, workflow_id: int, poi: PoiData) -> bool:
         """Check if the POI already exists in the database."""
-        with self.get_connection() as conn:
+        with get_connection(self.db_path) as conn:
             cursor = conn.execute(
                 "SELECT 1 FROM pois WHERE workflow_id = ? AND name = ? LIMIT 1",
                 (workflow_id, poi.name),
@@ -451,7 +439,7 @@ class PoiDatabase:
         if self.is_poi_deplicate(workflow_id, poi):
             return
 
-        with self.get_connection() as conn:
+        with get_connection(self.db_path) as conn:
             conn.execute(
                 """INSERT INTO pois (workflow_id, url, name, description, category, location) VALUES (?, ?, ?, ?, ?, ?)""",
                 (
@@ -467,7 +455,7 @@ class PoiDatabase:
 
     def get_all_pois(self, workflow_id: int) -> Dict[str, List[PoiData]]:
         """Retrieve all POIs for a workflow grouped by URL."""
-        with self.get_connection() as conn:
+        with get_connection(self.db_path) as conn:
             cursor = conn.execute(
                 "SELECT url, name, description, category, location FROM pois WHERE workflow_id = ? ORDER BY url",
                 (workflow_id,),
@@ -490,7 +478,7 @@ class PoiDatabase:
 
     def mark_workflow_completed(self, workflow_id: int) -> None:
         """Mark workflow as completed and clear queue state."""
-        with self.get_connection() as conn:
+        with get_connection(self.db_path) as conn:
             conn.execute(
                 """UPDATE workflows SET status = 'completed',
                     queue_state = NULL,
@@ -507,7 +495,7 @@ class PoiManager:
         base_url: str,
         poi_validator: ValidatePoiAgentProtocol,
         workflow_name: str,
-        db_path: Optional[str] = None,
+        db_path: Path,
     ):
         """Initialize the POIManager with a base URL.
 
@@ -519,7 +507,7 @@ class PoiManager:
             base_url (str): The base URL to start managing points of interest from.
             poi_validator (ValidatePoiAgentProtocol): The agent to validate points of interest.
             workflow_name (str): The name of the workflow.
-            db_path (Optional[str], optional): The path to the database file. Defaults to None.
+            db_path (Path): The path to the database file.
         """
         self.base_url = base_url
         self.base_domain = urlparse(base_url).netloc
