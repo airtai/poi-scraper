@@ -11,6 +11,8 @@ from poi_scraper.poi_manager import PoiManager
 from poi_scraper.scraper import Scraper
 from poi_scraper.utils import (
     generate_poi_markdown_table,
+    get_all_pois,
+    get_all_workflows,
     start_or_resume_workflow,
 )
 
@@ -26,13 +28,13 @@ llm_config = {
 
 wf = AutoGenWorkflows()
 
+# Database path
+DB_PATH = Path("poi_data.db")
+
 
 @wf.register(name="poi_scraper", description="POI scraper chat")  # type: ignore[misc]
 def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
-    # Database path
-    db_path = Path("poi_data.db")
-
-    workflow_name, base_url = start_or_resume_workflow(ui, db_path)
+    workflow_name, base_url = start_or_resume_workflow(ui, DB_PATH)
 
     # Initialize POI manager
     poi_validator = ValidatePoiAgent(llm_config=llm_config)
@@ -40,7 +42,7 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
         base_url=base_url,
         poi_validator=poi_validator,
         workflow_name=workflow_name,
-        db_path=db_path,
+        db_path=DB_PATH,
     )
 
     # Create scraper factory
@@ -67,27 +69,42 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
 
 @wf.register(name="show_poi", description="Show scraped POI's")  # type: ignore[misc]
 def show_poi_workflow(ui: UI, params: dict[str, Any]) -> str:
-    path = Path("poi_data.csv")
-    # load the pandas dataframe from disk
+    all_workflows = get_all_workflows(db_path=DB_PATH)
+
+    if not all_workflows:
+        ui.text_message(
+            sender="Workflow",
+            recipient="User",
+            body="No POI's found. Please run the scraper first.",
+        )
+        return "No POI's found."
+
+    workflow_names = [workflow["name"] for workflow in all_workflows]
+
+    selected_workflow = ui.multiple_choice(
+        sender="Workflow",
+        recipient="User",
+        prompt="Click on the workflow to show the POI's",
+        choices=workflow_names,
+        single=True,
+    )
+
+    # Query the pois table for the selected workflow
+    selected_workflow_id = next(
+        workflow["id"]
+        for workflow in all_workflows
+        if workflow["name"] == selected_workflow
+    )
 
     while True:
-        try:
-            df = pd.read_csv(path)
-        except FileNotFoundError:
-            ui.text_message(
-                sender="Workflow",
-                recipient="User",
-                body="No POI's found. Please run the scraper first.",
-            )
-            break
+        pois_data = get_all_pois(selected_workflow_id, DB_PATH)
 
-        # generate markdown table
-        table = df.to_markdown()
+        table = pd.DataFrame(pois_data).to_markdown()
 
         ui.text_message(
             sender="Workflow",
             recipient="User",
-            body=f"List of all registered POIs:\n{table}",
+            body=f"List of all registered POIs for {selected_workflow}:\n{table}",
         )
 
         answer = ui.multiple_choice(

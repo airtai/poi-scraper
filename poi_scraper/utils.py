@@ -98,10 +98,14 @@ def get_name_for_workflow(ui: UI, db_path: Path) -> str:
     return name
 
 
-def get_incomplete_workflows(db_path: Path) -> List[Dict[str, Any]]:
-    """Get all incomplete workflows from the database."""
+def get_all_workflows(db_path: Path, in_progress: bool = False) -> List[Dict[str, Any]]:
+    """Get all workflows from the database."""
     try:
-        statement = "SELECT * FROM workflows WHERE status != 'completed'"
+        statement = (
+            "SELECT * FROM workflows WHERE status != 'completed'"
+            if in_progress
+            else "SELECT * FROM workflows"
+        )
         with get_connection(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(statement)
@@ -112,9 +116,9 @@ def get_incomplete_workflows(db_path: Path) -> List[Dict[str, Any]]:
 
 def start_or_resume_workflow(ui: UI, db_path: Path) -> Tuple[str, str]:
     # Check if there are any incomplete workflows
-    incomplete_workflows = get_incomplete_workflows(db_path)
+    inprogress_workflows = get_all_workflows(db_path=db_path, in_progress=True)
 
-    if incomplete_workflows:
+    if inprogress_workflows:
         answer = ui.multiple_choice(
             sender="Workflow",
             recipient="User",
@@ -124,7 +128,7 @@ def start_or_resume_workflow(ui: UI, db_path: Path) -> Tuple[str, str]:
         )
         if answer == "Yes":
             incomplete_workflow_names = [
-                workflow["name"] for workflow in incomplete_workflows
+                workflow["name"] for workflow in inprogress_workflows
             ]
             selected_workflow = ui.multiple_choice(
                 sender="Workflow",
@@ -141,7 +145,7 @@ def start_or_resume_workflow(ui: UI, db_path: Path) -> Tuple[str, str]:
             # get the url for the selected_workflow from incomplete_workflows
             selected_workflow_base_url = next(
                 workflow["base_url"]
-                for workflow in incomplete_workflows
+                for workflow in inprogress_workflows
                 if workflow["name"] == selected_workflow
             )
             return selected_workflow, selected_workflow_base_url
@@ -159,6 +163,25 @@ def start_or_resume_workflow(ui: UI, db_path: Path) -> Tuple[str, str]:
     )
 
     return name, base_url
+
+
+def get_all_pois(workflow_id: int, db_path: Path) -> List[Dict[str, str]]:
+    statement = "SELECT * FROM pois WHERE workflow_id = ?"
+    with get_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(statement, (workflow_id,))
+        pois = cursor.fetchall()
+
+    return [
+        {
+            "name": poi["name"],
+            "url": poi["url"],
+            "description": poi["description"],
+            "category": poi["category"],
+            "location": poi["location"],
+        }
+        for poi in pois
+    ]
 
 
 def filter_same_domain_urls(

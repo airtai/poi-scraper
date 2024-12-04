@@ -18,14 +18,14 @@ class TestStartOrResumeWorkflow(TestCase):
         if self.db_path.exists():
             self.db_path.unlink()
 
-    @patch("poi_scraper.utils.get_incomplete_workflows")
-    def test_resume_workflow(self, mock_get_incomplete: MagicMock) -> None:
+    @patch("poi_scraper.utils.get_all_workflows")
+    def test_resume_workflow(self, mock_get_all_workflows: MagicMock) -> None:
         """Test resuming an existing workflow.
 
         This simulates when there are incomplete workflows and user chooses to resume one.
         """
         # Setup test data
-        mock_get_incomplete.return_value = [
+        mock_get_all_workflows.return_value = [
             {"name": "workflow1", "base_url": "https://www.example.com"},
             {"name": "workflow2", "base_url": "https://www.example.com"},
         ]
@@ -43,23 +43,23 @@ class TestStartOrResumeWorkflow(TestCase):
         # Verify the results
         assert result == ("workflow2", "https://www.example.com")
         assert mock_ui.multiple_choice.call_count == 2
-        mock_get_incomplete.assert_called_once()
+        mock_get_all_workflows.assert_called_once()
 
-    @patch("poi_scraper.utils.get_incomplete_workflows")
+    @patch("poi_scraper.utils.get_all_workflows")
     @patch("poi_scraper.utils.get_name_for_workflow")
     @patch("poi_scraper.utils.get_base_url")
     def test_new_workflow_no_incomplete(
         self,
         mock_get_base_url: MagicMock,
         mock_get_name: MagicMock,
-        mock_get_incomplete: MagicMock,
+        mock_get_all_workflows: MagicMock,
     ) -> None:
         """Test starting a new workflow when no incomplete workflows exist.
 
         Tests the direct path to creating a new workflow when there's nothing to resume.
         """
         # Setup mocks
-        mock_get_incomplete.return_value = []
+        mock_get_all_workflows.return_value = []
         mock_get_name.return_value = "new_workflow"
         mock_get_base_url.return_value = "https://www.example.com"
 
@@ -74,16 +74,16 @@ class TestStartOrResumeWorkflow(TestCase):
         assert mock_ui.multiple_choice.call_count == 0  # Should never be called
         mock_get_name.assert_called_once_with(mock_ui, self.db_path)
         mock_get_base_url.assert_called_once_with(mock_ui)
-        mock_get_incomplete.assert_called_once()
+        mock_get_all_workflows.assert_called_once()
 
-    @patch("poi_scraper.utils.get_incomplete_workflows")
+    @patch("poi_scraper.utils.get_all_workflows")
     @patch("poi_scraper.utils.get_name_for_workflow")
     @patch("poi_scraper.utils.get_base_url")
     def test_new_workflow_with_existing_incomplete(
         self,
         mock_get_base_url: MagicMock,
         mock_get_name: MagicMock,
-        mock_get_incomplete: MagicMock,
+        mock_get_all_workflows: MagicMock,
     ) -> None:
         """Test creating a new workflow when incomplete workflows exist.
 
@@ -91,7 +91,7 @@ class TestStartOrResumeWorkflow(TestCase):
         incomplete workflows available.
         """
         # Setup mocks
-        mock_get_incomplete.return_value = [{"name": "existing_workflow"}]
+        mock_get_all_workflows.return_value = [{"name": "existing_workflow"}]
         mock_get_name.return_value = "unique_workflow"
         mock_get_base_url.return_value = "https://www.example.com"
 
@@ -107,7 +107,7 @@ class TestStartOrResumeWorkflow(TestCase):
         assert mock_ui.multiple_choice.call_count == 1
         mock_get_name.assert_called_once_with(mock_ui, self.db_path)
         mock_get_base_url.assert_called_once_with(mock_ui)
-        mock_get_incomplete.assert_called_once()
+        mock_get_all_workflows.assert_called_once()
 
     @patch("poi_scraper.utils.get_name_for_workflow")
     @patch("poi_scraper.utils.get_base_url")
@@ -135,14 +135,14 @@ class TestStartOrResumeWorkflow(TestCase):
         mock_get_name.assert_called_once_with(mock_ui, self.db_path)
         mock_get_base_url.assert_called_once_with(mock_ui)
 
-    @patch("poi_scraper.utils.get_incomplete_workflows")
+    @patch("poi_scraper.utils.get_all_workflows")
     @patch("poi_scraper.utils.get_name_for_workflow")
     @patch("poi_scraper.utils.is_valid_url")
     def test_new_workflow_invalid_url_handling(
         self,
         mock_is_valid_url: MagicMock,
         mock_get_name: MagicMock,
-        mock_get_incomplete: MagicMock,
+        mock_get_all_workflows: MagicMock,
     ) -> None:
         """Test handling of invalid URLs when creating a new workflow.
 
@@ -153,7 +153,7 @@ class TestStartOrResumeWorkflow(TestCase):
         4. Workflow creation succeeds
         """
         # Setup mocks for workflow state
-        mock_get_incomplete.return_value = []
+        mock_get_all_workflows.return_value = []
         mock_get_name.return_value = "new_workflow"
 
         # Setup URL validation to fail once then succeed
@@ -175,4 +175,4 @@ class TestStartOrResumeWorkflow(TestCase):
         mock_get_name.assert_called_once_with(mock_ui, self.db_path)
         assert mock_ui.text_input.call_count == 2  # Should be called twice for URLs
         assert mock_is_valid_url.call_count == 2  # Should validate URL twice
-        mock_get_incomplete.assert_called_once()
+        mock_get_all_workflows.assert_called_once()
