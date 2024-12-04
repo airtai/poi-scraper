@@ -1,7 +1,7 @@
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, List, Literal, Tuple
+from typing import Any, Dict, Iterator, List, Literal, Tuple
 from urllib.parse import urlparse
 
 from fastagency import UI
@@ -64,11 +64,14 @@ def get_base_url(ui: UI) -> str:
 
 
 def is_unique_name(name: str, db_path: Path) -> bool:
-    statement = "SELECT COUNT(*) FROM workflows WHERE name = ?"
-    with get_connection(db_path) as conn:
-        cursor = conn.cursor()
-        cursor.execute(statement, (name,))
-        return bool(cursor.fetchone()[0] == 0)
+    try:
+        statement = "SELECT COUNT(*) FROM workflows WHERE name = ?"
+        with get_connection(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(statement, (name,))
+            return bool(cursor.fetchone()[0] == 0)
+    except sqlite3.OperationalError:
+        return True
 
 
 def get_name_for_workflow(ui: UI, db_path: Path) -> str:
@@ -93,6 +96,69 @@ def get_name_for_workflow(ui: UI, db_path: Path) -> str:
         )
 
     return name
+
+
+def get_incomplete_workflows(db_path: Path) -> List[Dict[str, Any]]:
+    """Get all incomplete workflows from the database."""
+    try:
+        statement = "SELECT * FROM workflows WHERE status != 'completed'"
+        with get_connection(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(statement)
+            return [dict(row) for row in cursor.fetchall()]
+    except sqlite3.OperationalError:
+        return []
+
+
+def start_or_resume_workflow(ui: UI, db_path: Path) -> Tuple[str, str]:
+    # Check if there are any incomplete workflows
+    incomplete_workflows = get_incomplete_workflows(db_path)
+
+    if incomplete_workflows:
+        answer = ui.multiple_choice(
+            sender="Workflow",
+            recipient="User",
+            prompt="There are incomplete workflows. Do you want to resume any of them?",
+            choices=["Yes", "No"],
+            single=True,
+        )
+        if answer == "Yes":
+            incomplete_workflow_names = [
+                workflow["name"] for workflow in incomplete_workflows
+            ]
+            selected_workflow = ui.multiple_choice(
+                sender="Workflow",
+                recipient="User",
+                prompt="Which workflow do you want to resume?",
+                choices=incomplete_workflow_names,
+                single=True,
+            )
+            ui.text_message(
+                sender="Workflow",
+                recipient="User",
+                body=f"Resuming workflow: {selected_workflow}.",
+            )
+            # get the url for the selected_workflow from incomplete_workflows
+            selected_workflow_base_url = next(
+                workflow["base_url"]
+                for workflow in incomplete_workflows
+                if workflow["name"] == selected_workflow
+            )
+            return selected_workflow, selected_workflow_base_url
+
+    # Get valid URL from user
+    name = get_name_for_workflow(ui, db_path)
+    base_url = get_base_url(ui)
+    # base_url = "https://www.infofazana.hr/en"
+    # base_url = "www.medulinriviera.info"
+
+    ui.text_message(
+        sender="Workflow",
+        recipient="User",
+        body=f"Starting POI collection for base_url: {base_url}.",
+    )
+
+    return name, base_url
 
 
 def filter_same_domain_urls(

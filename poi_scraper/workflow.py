@@ -11,8 +11,7 @@ from poi_scraper.poi_manager import PoiManager
 from poi_scraper.scraper import Scraper
 from poi_scraper.utils import (
     generate_poi_markdown_table,
-    get_base_url,
-    get_name_for_workflow,
+    start_or_resume_workflow,
 )
 
 llm_config = {
@@ -33,24 +32,14 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
     # Database path
     db_path = Path("poi_data.db")
 
-    # Get valid URL from user
-    name = get_name_for_workflow(ui, db_path)
-    base_url = get_base_url(ui)
-    # base_url = "https://www.infofazana.hr/en"
-    # base_url = "www.medulinriviera.info"
-
-    ui.text_message(
-        sender="Workflow",
-        recipient="User",
-        body=f"Starting POI collection forbase_url: {base_url}.",
-    )
+    workflow_name, base_url = start_or_resume_workflow(ui, db_path)
 
     # Initialize POI manager
     poi_validator = ValidatePoiAgent(llm_config=llm_config)
     poi_manager = PoiManager(
         base_url=base_url,
         poi_validator=poi_validator,
-        workflow_name=name,
+        workflow_name=workflow_name,
         db_path=db_path,
     )
 
