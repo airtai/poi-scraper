@@ -188,8 +188,6 @@ class TestPoiManager(TestCase):
 
             if expected_status == "completed":
                 assert workflow["queue_state"] is None
-                assert workflow["all_urls_scores"] is None
-                assert workflow["less_score_urls"] is None
 
     def verify_pois(
         self, workflow_id: int, expected_pois: Dict[str, List[PoiData]]

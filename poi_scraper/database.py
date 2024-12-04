@@ -2,7 +2,7 @@ import pickle  # nosec B403
 from dataclasses import dataclass
 from itertools import groupby
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from poi_scraper.poi_types import PoiData
 from poi_scraper.statistics import Link
@@ -13,10 +13,7 @@ from poi_scraper.utils import get_connection
 class WorkflowState:
     """Contains the complete state of a workflow."""
 
-    urls: List[Link]
     homepage: Link
-    all_urls_with_scores: Dict[str, List[Tuple[str, Literal[1, 2, 3, 4, 5]]]]
-    urls_with_less_score: Dict[str, int]
 
 
 class PoiDatabase:
@@ -35,8 +32,6 @@ class PoiDatabase:
             base_url TEXT NOT NULL,
             status TEXT NOT NULL,
             queue_state BLOB,  -- Stores serialized queue and homepage
-            all_urls_scores BLOB,   -- Stores all_urls_with_scores dictionary
-            less_score_urls BLOB,  -- Stores urls_with_less_score dictionary
             UNIQUE(name)
         );
 
@@ -67,7 +62,7 @@ class PoiDatabase:
         """Create a new workflow or get existing one with all state."""
         with get_connection(self.db_path) as conn:
             cursor = conn.execute(
-                "SELECT id, queue_state, all_urls_scores, less_score_urls FROM workflows WHERE name = ?",
+                "SELECT id, queue_state FROM workflows WHERE name = ?",
                 (name,),
             )
             workflow = cursor.fetchone()
@@ -78,37 +73,18 @@ class PoiDatabase:
                     queue_state = pickle.loads(  # nosec B301
                         workflow["queue_state"]
                     )
-                    url_scores = (
-                        # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-                        pickle.loads(  # nosec B301
-                            workflow["all_urls_scores"]
-                        )
-                        if workflow["all_urls_scores"]
-                        else {}
-                    )
-                    less_score_urls = (
-                        # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-                        pickle.loads(  # nosec B301
-                            workflow["less_score_urls"]
-                        )
-                        if workflow["less_score_urls"]
-                        else {}
-                    )
 
                     return workflow["id"], WorkflowState(
-                        urls=queue_state[0],
-                        homepage=queue_state[1],
-                        all_urls_with_scores=url_scores,
-                        urls_with_less_score=less_score_urls,
+                        homepage=queue_state,
                     )
                 return workflow["id"], None
 
             # Create new workflow if it doesn't exist
             cursor = conn.execute(
                 """INSERT INTO workflows (
-                        name,base_url, status, queue_state, all_urls_scores, less_score_urls
-                    ) VALUES (?, ?, ?, ?, ?, ?)""",
-                (name, base_url, "in_progress", None, None, None),
+                        name,base_url, status, queue_state
+                    ) VALUES (?, ?, ?, ?)""",
+                (name, base_url, "in_progress", None),
             )
 
             conn.commit()
@@ -118,18 +94,11 @@ class PoiDatabase:
         """Save the state of the workflow in the database."""
         with get_connection(self.db_path) as conn:
             queue_state = pickle.dumps(  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-                (state.urls, state.homepage)
+                state.homepage
             )
-            url_scores = pickle.dumps(  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-                state.all_urls_with_scores
-            )
-            less_score_urls = pickle.dumps(  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-                state.urls_with_less_score
-            )
-
             conn.execute(
-                """UPDATE workflows SET queue_state = ?, all_urls_scores = ?, less_score_urls = ? WHERE id = ?""",
-                (queue_state, url_scores, less_score_urls, workflow_id),
+                """UPDATE workflows SET queue_state = ? WHERE id = ?""",
+                (queue_state, workflow_id),
             )
             conn.commit()
 
@@ -188,10 +157,7 @@ class PoiDatabase:
         """Mark workflow as completed and clear queue state."""
         with get_connection(self.db_path) as conn:
             conn.execute(
-                """UPDATE workflows SET status = 'completed',
-                    queue_state = NULL,
-                    all_urls_scores = NULL,
-                    less_score_urls = NULL WHERE id = ?""",
+                """UPDATE workflows SET status = 'completed', queue_state = NULL WHERE id = ?""",
                 (workflow_id,),
             )
             conn.commit()

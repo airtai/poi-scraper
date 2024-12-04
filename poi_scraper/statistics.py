@@ -17,6 +17,31 @@ class Site:
         """
         return {url: round(link.score, decimals) for url, link in self.urls.items()}
 
+    def get_sorted_unvisited_links(
+        self, min_score: Optional[int] = None
+    ) -> List["Link"]:
+        """Get unvisited links from the site, sorted by score in descending order.
+
+        Args:
+            min_score (Optional[int]): The minimum score required for the link.
+
+        Returns:
+            List[Link]: The unvisited links from the site, sorted by score in descending order.
+
+        """
+        # Get all URLs from the site
+        all_links = self.urls.values()
+
+        # Filter for unvisited links and apply score threshold if provided
+        unvisited = [
+            link
+            for link in all_links
+            if not link.visited and (min_score is None or link.score >= min_score)
+        ]
+
+        # Sort the unvisited links by score in descending order
+        return sorted(unvisited, key=lambda x: x.score, reverse=True)
+
 
 @dataclass
 class Link:
