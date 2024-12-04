@@ -79,7 +79,7 @@ def get_name_for_workflow(ui: UI, db_path: Path) -> str:
         name: str = ui.text_input(
             sender="Workflow",
             recipient="User",
-            prompt="Please provide a name for the workflow. You can use this name to restart the workflow if it gets stuck or to view the scraping results.",
+            prompt="Please provide a name for the scraping task. You can use this name to restart the task if it gets stuck or to view the results.",
         )
 
         # If database is not created yet, return the name
@@ -118,7 +118,7 @@ def start_or_resume_workflow(ui: UI, db_path: Path) -> Tuple[str, str]:
         answer = ui.multiple_choice(
             sender="Workflow",
             recipient="User",
-            prompt="There are incomplete workflows. Do you want to resume any of them?",
+            prompt="Incomplete scraping tasks found. Do you want to resume any of them?",
             choices=["Yes", "No"],
             single=True,
         )
@@ -129,14 +129,14 @@ def start_or_resume_workflow(ui: UI, db_path: Path) -> Tuple[str, str]:
             selected_workflow = ui.multiple_choice(
                 sender="Workflow",
                 recipient="User",
-                prompt="Which workflow do you want to resume?",
+                prompt="Which scraping tasks do you want to resume?",
                 choices=incomplete_workflow_names,
                 single=True,
             )
             ui.text_message(
                 sender="Workflow",
                 recipient="User",
-                body=f"Resuming workflow: {selected_workflow}.",
+                body=f"Resuming scraping task for {selected_workflow}.",
             )
             # get the url for the selected_workflow from incomplete_workflows
             selected_workflow_base_url = next(
