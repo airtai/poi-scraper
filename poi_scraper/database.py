@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from poi_scraper.poi_types import PoiData
-from poi_scraper.statistics import Link
+from poi_scraper.statistics import Site
 from poi_scraper.utils import get_connection
 
 
@@ -13,7 +13,7 @@ from poi_scraper.utils import get_connection
 class WorkflowStatistics:
     """Contains the complete state of a workflow."""
 
-    homepage_link_obj: Link
+    site_obj: Site
 
 
 class PoiDatabase:
@@ -31,7 +31,7 @@ class PoiDatabase:
             name TEXT NOT NULL,
             base_url TEXT NOT NULL,
             status TEXT NOT NULL,
-            homepage_link_obj BLOB,  -- Stores serialized queue and homepage
+            site_obj BLOB,  -- Stores serialized queue and homepage
             UNIQUE(name)
         );
 
@@ -62,27 +62,26 @@ class PoiDatabase:
         """Create a new workflow or get existing one with all state."""
         with get_connection(self.db_path) as conn:
             cursor = conn.execute(
-                "SELECT id, homepage_link_obj FROM workflows WHERE name = ?",
+                "SELECT id, site_obj FROM workflows WHERE name = ?",
                 (name,),
             )
             workflow = cursor.fetchone()
 
             if workflow:
-                if workflow["homepage_link_obj"] is not None:
+                if workflow["site_obj"] is not None:
                     # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-                    homepage_link_obj = pickle.loads(  # nosec B301
-                        workflow["homepage_link_obj"]
+                    site_obj = pickle.loads(  # nosec B301
+                        workflow["site_obj"]
                     )
-
                     return workflow["id"], WorkflowStatistics(
-                        homepage_link_obj=homepage_link_obj,
+                        site_obj=site_obj,
                     )
                 return workflow["id"], None
 
             # Create new workflow if it doesn't exist
             cursor = conn.execute(
                 """INSERT INTO workflows (
-                        name,base_url, status, homepage_link_obj
+                        name,base_url, status, site_obj
                     ) VALUES (?, ?, ?, ?)""",
                 (name, base_url, "in_progress", None),
             )
@@ -90,15 +89,18 @@ class PoiDatabase:
             conn.commit()
             return cursor.lastrowid, None  # type: ignore
 
-    def save_workflow_state(self, workflow_id: int, state: WorkflowStatistics) -> None:
-        """Save the state of the workflow in the database."""
+    def save_workflow_state(
+        self, workflow_id: int, statistics: WorkflowStatistics
+    ) -> None:
+        """Save the statistics of the workflow in the database."""
         with get_connection(self.db_path) as conn:
-            homepage_link_obj = pickle.dumps(  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
-                state.homepage_link_obj
+            site_obj = pickle.dumps(  # nosemgrep: python.lang.security.deserialization.pickle.avoid-pickle
+                statistics.site_obj,
+                protocol=pickle.HIGHEST_PROTOCOL,
             )
             conn.execute(
-                """UPDATE workflows SET homepage_link_obj = ? WHERE id = ?""",
-                (homepage_link_obj, workflow_id),
+                """UPDATE workflows SET site_obj = ? WHERE id = ?""",
+                (site_obj, workflow_id),
             )
             conn.commit()
 
@@ -157,7 +159,7 @@ class PoiDatabase:
         """Mark workflow as completed and clear queue state."""
         with get_connection(self.db_path) as conn:
             conn.execute(
-                """UPDATE workflows SET status = 'completed', homepage_link_obj = NULL WHERE id = ?""",
+                """UPDATE workflows SET status = 'completed', site_obj = NULL WHERE id = ?""",
                 (workflow_id,),
             )
             conn.commit()

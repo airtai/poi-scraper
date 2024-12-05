@@ -123,7 +123,7 @@ class TestPoiManager(TestCase):
             assert workflow["base_url"] == self.base_url
 
             if expected_status == "completed":
-                assert workflow["homepage_link_obj"] is None
+                assert workflow["site_obj"] is None
 
     def verify_pois(
         self, workflow_id: int, expected_pois: Dict[str, List[PoiData]]

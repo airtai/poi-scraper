@@ -1,12 +1,74 @@
 import math
 import statistics
 from dataclasses import dataclass, field
-from typing import Dict, List, Literal, Optional, Set
+from typing import Any, Dict, List, Literal, Optional, Set
 
 
 @dataclass
 class Site:
     urls: Dict[str, "Link"]
+
+    def __getstate__(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
+        """Serializes the Site object by capturing the essential state of all Links.
+
+        This method creates a simpler structure that avoids circular references by
+        storing just the core data about each URL and its relationships.
+        """
+        state = {
+            "url_data": {
+                url: {
+                    "url": link.url,
+                    "estimated_score": link.estimated_score,
+                    "parent_urls": [parent.url for parent in link.parents],
+                    "visited": link.visited,
+                    "children_urls": [child.url for child in link.children],
+                    "children_visited": link.children_visited,
+                    "children_poi_found": link.children_poi_found,
+                }
+                for url, link in self.urls.items()
+            }
+        }
+
+        return state
+
+    def __setstate__(self, state: Dict[str, Dict[str, Dict[str, Any]]]) -> None:
+        """Reconstructs the Site and all its Links from the serialized state.
+
+        This method follows a two-phase reconstruction:
+        1. Creates all Link objects with their basic properties
+        2. Establishes the relationships between Links
+        """
+        # Phase 1: Create bare Links with their basic properties
+        self.urls = {}
+        for url, link_data in state["url_data"].items():
+            # Create a new Link object with basic properties
+            link = Link(
+                site=self,
+                url=link_data["url"],
+                estimated_score=link_data["estimated_score"],
+                parents=set(),  # Parents will be added in Phase 2
+                visited=link_data["visited"],
+                children=[],  # Children will be added in Phase 2
+                children_visited=link_data["children_visited"],
+                children_poi_found=link_data["children_poi_found"],
+            )
+            self.urls[url] = link
+
+        # Phase 2: Establish relationships between Links
+        for url, link_data in state["url_data"].items():
+            current_link = self.urls[url]
+
+            # Add parent Links
+            current_link.parents = (
+                {self.urls[parent_url] for parent_url in link_data["parent_urls"]}  # type: ignore
+                if link_data["parent_urls"]
+                else None
+            )
+
+            # Add children Links
+            current_link.children = [
+                self.urls[child_url] for child_url in link_data["children_urls"]
+            ]
 
     def get_url_scores(self, decimals: int = 5) -> Dict[str, float]:
         """Return the scores of all the URLs in the site.

@@ -37,12 +37,12 @@ class PoiManager(PoiManagerProtocol):
         self._urls_with_scores: Dict[str, List[Tuple[str, Literal[1, 2, 3, 4, 5]]]] = {}
 
         # Initialize or resume workflow with all state
-        self.workflow_id, homepage_link_obj = self.db.create_or_get_workflow(
+        self.workflow_id, site_obj = self.db.create_or_get_workflow(
             workflow_name, base_url
         )
 
-        if homepage_link_obj:
-            self.homepage = homepage_link_obj.homepage_link_obj
+        if site_obj:
+            self.homepage = site_obj.site_obj.urls[base_url]
         else:
             self.homepage = Link.create(parent=None, url=base_url, estimated_score=5)
             self._save_state_in_db()
@@ -52,7 +52,7 @@ class PoiManager(PoiManagerProtocol):
         self.db.save_workflow_state(
             self.workflow_id,
             WorkflowStatistics(
-                homepage_link_obj=self.homepage,
+                site_obj=self.homepage.site,
             ),
         )
 
