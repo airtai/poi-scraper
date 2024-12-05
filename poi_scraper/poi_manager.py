@@ -2,11 +2,15 @@ from pathlib import Path
 from typing import Dict, List, Literal, Optional, Tuple
 from urllib.parse import urlparse
 
+from fastagency.logging import get_logger
+
 from poi_scraper.database import PoiDatabase, WorkflowStatistics
 from poi_scraper.poi_types import PoiData, PoiManagerProtocol, ValidatePoiAgentProtocol
 from poi_scraper.scraper import Scraper
 from poi_scraper.statistics import Link, Site
 from poi_scraper.utils import filter_same_domain_urls
+
+logger = get_logger(__name__)
 
 
 class PoiManager(PoiManagerProtocol):
@@ -88,13 +92,17 @@ class PoiManager(PoiManagerProtocol):
         # Get the site object for the website
         site = self.homepage.site
 
-        # Initialize unvisited links with the homepage
-        unvisited_links = [self.homepage]
+        # Initialize unvisited links, defaulting to homepage if none exist
+        unvisited_links = site.get_sorted_unvisited_links(min_score) or [self.homepage]
 
         while unvisited_links:
             # Process the highest scoring link first
             current_link = unvisited_links[0]
             self.current_url = current_link.url
+
+            logger.info(f"Current URL: {self.current_url}")
+            logger.info(f"Current URL Score: {current_link.score}")
+            logger.info(f"All URLs: {site.get_url_scores()}")
 
             # Process URL
             scrape(self.current_url)
