@@ -19,7 +19,9 @@ class Site:
                 url: {
                     "url": link.url,
                     "estimated_score": link.estimated_score,
-                    "parent_urls": [parent.url for parent in link.parents],
+                    "parent_urls": [parent.url for parent in link.parents]
+                    if link.parents
+                    else None,
                     "visited": link.visited,
                     "children_urls": [child.url for child in link.children],
                     "children_visited": link.children_visited,
@@ -156,7 +158,8 @@ class Link:
         if parent and url in parent.site.urls:
             site = parent.site
             link = parent.site.urls[url]
-            link.parents.add(parent)
+            if link.parents:
+                link.parents.add(parent)
         else:
             site = Site(urls={}) if parent is None else parent.site
             parents = {parent} if parent else set()
