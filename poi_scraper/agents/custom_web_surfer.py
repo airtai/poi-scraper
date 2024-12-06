@@ -5,6 +5,44 @@ from fastagency.runtimes.autogen.tools import WebSurferTool
 
 from poi_scraper.poi_types import CustomWebSurferAnswer
 
+URL_IDENTIFICATION_INSTRUCTION_MSG = """
+    - Collect only the URLs that point to the English version of the webpage. Ignore URLs that indicate non-English content.
+    - Follow the below rules to determine if a URL is in English:
+        - Path: Check for a standalone two-letter language code between slashes (e.g., /es/, /fr/). Exclude URLs with codes other than en.
+        - Query Parameters: Check if the lang or language parameter is present. Exclude URLs where this parameter is set to anything other than en.
+
+            - Examples of Non-English URLs:
+                - https://www.example.com/fr/about
+                - https://www.example.com/shop?lang=de
+                - https://www.example.com/store?language=es
+                - https://www.example.com/fr/shop?lang=fr
+            - Examples of English URLs:
+                - https://www.example.com/en/products
+                - https://www.example.com/fresh/items
+                - https://www.example.hr/fresh/items
+                - https://www.kayak.co.in/Chennai.13827.guide/places
+
+        Note: Only consider language codes in paths and query parameters. Ignore language indications in domains or subdomains.
+
+    - For each collected URL on the page, assign a relevance score (1-5):
+        - 5: Highly likely to lead to more POIs (e.g., "places," "activities," "landmarks").
+        - 1: Unlikely to lead to POIs (e.g., "contact-us," "privacy-policy").
+
+    - Provide the URLs and scores as a dictionary. Example:
+        {
+            "https://www.kayak.co.in/Chennai.13827.guide/places" : 5,
+            "https://www.kayak.co.in/Chennai.13827.guide/activities" : 5,
+            "https://www.kayak.co.in/Chennai.13827.guide/hotels/Taj-Coromandel" : 5,
+            "https://www.kayak.co.in/Chennai.13827.guide/nightlife" : 5,
+            "https://www.kayak.co.in/Chennai.13827.guide/food" : 4,
+            "https://www.kayak.co.in/Chennai.13827.guide/contact-us" : 2,
+            "https://www.kayak.co.in/Chennai.13827.guide/transport" : 3,
+            "https://www.kayak.co.in/Chennai.13827.guide/about-us" : 2,
+            "https://www.kayak.co.in/Chennai.13827.guide/privacy-policy" : 1,
+            "https://www.kayak.co.in/Chennai.13827.guide/faq" : 1
+        }
+"""
+
 
 class CustomWebSurferTool(WebSurferTool):  # type: ignore[misc]
     def __init__(self, *args: Any, **kwargs: Any):
@@ -30,7 +68,7 @@ The Web_Surfer_Tool_inner_websurfer agent can:
 Your goal is to collect:
 
     - Points of Interest (POIs): Specific places like landmarks, attractions, or destinations.
-    - URLs with relevance scores: Links found on the webpage, scored based on their likelihood of leading to more POIs.
+    - URLs with relevance scores: URLs that point to the English version of the webpage, scored based on their likelihood of leading to more POIs.
 
 Example instructions for the Web_Surfer_Tool_inner_websurfer agent:
 
@@ -41,7 +79,7 @@ Example instructions for the Web_Surfer_Tool_inner_websurfer agent:
         - Repeat this process: scrape, then scroll down, until you reach the bottom of the page or no new content loads.
         - If there's a "Load More" button, click it to reveal additional content.
         - Find Relevant URLs:
-            - Identify all URLs and score their relevance based on their likelihood of leading to more POIs.
+            - Identify all the URLs that point to the English version of the webpage and score their relevance based on their likelihood of leading to more POIs.
 
     3. Useful commands:
         - The 'visit_page' and scroll_down' commands are enough to complete this task effectively.
@@ -76,24 +114,9 @@ POI Collection:
     - If no POI data is available, return: "The page does not contain any POI information.". You SHOULD only return this if you have thoroughly checked the entire page and are certain that no POIs are present. This is non-negotiable and you will be penalized if you return this message without checking the entire page.
 
 URL Collection:
-
-    - For each URL on the page, assign a relevance score (1-5):
-        - 5: Highly likely to lead to more POIs (e.g., "places," "activities," "landmarks").
-        - 1: Unlikely to lead to POIs (e.g., "contact-us," "privacy-policy").
-    - Provide the URLs and scores as a dictionary. Example:
-        {
-            "https://www.kayak.co.in/Chennai.13827.guide/places" : 5,
-            "https://www.kayak.co.in/Chennai.13827.guide/activities" : 5,
-            "https://www.kayak.co.in/Chennai.13827.guide/hotels/Taj-Coromandel" : 5,
-            "https://www.kayak.co.in/Chennai.13827.guide/nightlife" : 5,
-            "https://www.kayak.co.in/Chennai.13827.guide/food" : 4,
-            "https://www.kayak.co.in/Chennai.13827.guide/contact-us" : 2,
-            "https://www.kayak.co.in/Chennai.13827.guide/transport" : 3,
-            "https://www.kayak.co.in/Chennai.13827.guide/about-us" : 2,
-            "https://www.kayak.co.in/Chennai.13827.guide/privacy-policy" : 1,
-            "https://www.kayak.co.in/Chennai.13827.guide/faq" : 1
-        }
-
+"""
+            + URL_IDENTIFICATION_INSTRUCTION_MSG
+            + """
 FINAL MESSAGE:
 
     - You MUST only return the below final message only after the Web_Surfer_Tool_inner_websurfer has visited the entire webpage and collected all the required data.
