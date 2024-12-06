@@ -90,7 +90,7 @@ class TestPoiManager(TestCase):
             self.db_path.unlink()
 
         self.base_url = "https://www.example.com"
-        self.workflow_name = "Test Workflow"
+        self.task_name = "Test Workflow"
 
         self.poi_validator = MockValidatePoiAgent()
         self.mock_scrape = MockScraper(self)
@@ -99,7 +99,7 @@ class TestPoiManager(TestCase):
         self.manager = PoiManager(
             base_url=self.base_url,
             poi_validator=self.poi_validator,
-            workflow_name=self.workflow_name,
+            task_name=self.task_name,
             db_path=self.db_path,
         )
 
@@ -108,40 +108,38 @@ class TestPoiManager(TestCase):
         if self.db_path.exists():
             self.db_path.unlink()
 
-    def verify_workflow_state(self, workflow_id: int, expected_status: str) -> None:
-        """Verify the state of the workflow in the database."""
+    def verify_task_state(self, task_id: int, expected_status: str) -> None:
+        """Verify the state of the task in the database."""
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                "SELECT * FROM workflows WHERE id = ?", (workflow_id,)
-            )
-            workflow = cursor.fetchone()
+            cursor = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+            task = cursor.fetchone()
 
-            assert workflow is not None, f"No workflow found with ID {workflow_id}"
-            assert workflow["status"] == expected_status
-            assert workflow["name"] == self.workflow_name
-            assert workflow["base_url"] == self.base_url
+            assert task is not None, f"No task found with ID {task_id}"
+            assert task["status"] == expected_status
+            assert task["name"] == self.task_name
+            assert task["base_url"] == self.base_url
 
             if expected_status == "completed":
-                assert workflow["site_obj"] is None
+                assert task["site_obj"] is None
 
     def verify_pois(
-        self, workflow_id: int, expected_pois: Dict[str, List[PoiData]]
+        self, task_id: int, expected_pois: Dict[str, List[PoiData]]
     ) -> None:
         """Verify the POIs in the database."""
         # Get POIs from database
         db = PoiDatabase(self.db_path)
-        actual_pois = db.get_all_pois(workflow_id)
+        actual_pois = db.get_all_pois(task_id)
 
         # Compare with expected POIs
         assert (
             actual_pois == expected_pois
         ), f"POIs in database don't match expected.\nGot: {actual_pois}\nExpected: {expected_pois}"
 
-    def test_new_and_resume_workflow(self) -> None:
-        """Test complete workflow execution from scratch."""
-        # verify initial workflow state
-        self.verify_workflow_state(self.manager.workflow_id, "in_progress")
+    def test_new_and_resume_task(self) -> None:
+        """Test complete task execution from scratch."""
+        # verify initial task state
+        self.verify_task_state(self.manager.task_id, "in_progress")
 
         # Process base URL
         pois, site = self.manager.process(self.mock_scrape)
@@ -154,10 +152,10 @@ class TestPoiManager(TestCase):
                 PoiData("name_3", "Description 3", "Category 3", "Location 3"),
             ]
         }
-        self.verify_pois(self.manager.workflow_id, expected_pois)
+        self.verify_pois(self.manager.task_id, expected_pois)
 
-        # Verify final workflow state
-        self.verify_workflow_state(self.manager.workflow_id, "completed")
+        # Verify final task state
+        self.verify_task_state(self.manager.task_id, "completed")
 
         # Verify site structure
         expected_urls = {
@@ -169,11 +167,11 @@ class TestPoiManager(TestCase):
 
         assert site.get_url_scores(decimals=3) == expected_urls
 
-        # Simulate resume workflow
+        # Simulate resume task
         resumed_manager = PoiManager(
             base_url=self.base_url,
             poi_validator=self.poi_validator,
-            workflow_name=self.workflow_name,
+            task_name=self.task_name,
             db_path=self.db_path,
         )
 
@@ -189,4 +187,4 @@ class TestPoiManager(TestCase):
             ]
         }
 
-        self.verify_pois(resumed_manager.workflow_id, expected_pois_resume)
+        self.verify_pois(resumed_manager.task_id, expected_pois_resume)

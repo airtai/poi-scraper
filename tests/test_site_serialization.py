@@ -134,7 +134,7 @@ class TestSiteSerialization:
         """
         db_path = Path("test_poi_data.db")
         base_url = "https://travel.example.com"
-        workflow_name = "Test Workflow"
+        task_name = "Test Workflow"
         try:
             # Create our complex test site
             original_site = self.setup_test_site(base_url)
@@ -143,16 +143,16 @@ class TestSiteSerialization:
             manager = PoiManager(
                 base_url=base_url,
                 poi_validator=MockValidatePoiAgent(),
-                workflow_name=workflow_name,
+                task_name=task_name,
                 db_path=db_path,
             )
             # save the state in the database
             manager.homepage = original_site.urls[base_url]
             manager._save_state_in_db()
 
-            # resume workflow
-            manager.workflow_id, site_obj = manager.db.create_or_get_workflow(
-                workflow_name, base_url
+            # resume task
+            manager.task_id, site_obj = manager.db.create_or_get_task(
+                task_name, base_url
             )
 
             # Verify the reconstruction

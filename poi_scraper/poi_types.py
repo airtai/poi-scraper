@@ -3,7 +3,7 @@ from typing import Annotated, Literal, Optional, Protocol
 
 from pydantic import BaseModel, Field
 
-WorkflowStatus = Literal["in_progress", "completed"]
+TaskStatus = Literal["in_progress", "completed"]
 
 
 @dataclass
