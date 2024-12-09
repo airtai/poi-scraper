@@ -81,7 +81,7 @@ class PoiDatabase:
             # Create new task if it doesn't exist
             cursor = conn.execute(
                 """INSERT INTO tasks (
-                        name,base_url, status, site_obj
+                        name, base_url, status, site_obj
                     ) VALUES (?, ?, ?, ?)""",
                 (name, base_url, "in_progress", None),
             )
@@ -157,7 +157,7 @@ class PoiDatabase:
         """Mark task as completed and clear queue state."""
         with get_connection(self.db_path) as conn:
             conn.execute(
-                """UPDATE tasks SET status = 'completed', site_obj = NULL WHERE id = ?""",
+                """UPDATE tasks SET status = 'completed' WHERE id = ?""",
                 (task_id,),
             )
             conn.commit()

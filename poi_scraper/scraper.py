@@ -5,7 +5,10 @@ from typing import Any, Callable, Dict, Literal, Optional
 from autogen import AssistantAgent, register_function
 from fastagency.logging import get_logger
 
-from poi_scraper.agents.custom_web_surfer import CustomWebSurferTool
+from poi_scraper.agents.custom_web_surfer import (
+    URL_IDENTIFICATION_INSTRUCTION_MSG,
+    CustomWebSurferTool,
+)
 from poi_scraper.poi_types import PoiData, PoiManagerProtocol
 
 logger = get_logger(__name__)
@@ -16,7 +19,8 @@ class Scraper:
     """A scraper factory that creates a callable scraper function."""
 
     llm_config: Dict[str, Any]
-    system_message: str = """You are a web surfer agent tasked with collecting Points of Interest (POIs) and URLs from a given webpage.
+    system_message: str = (
+        """You are a web surfer agent tasked with collecting Points of Interest (POIs) and URLs from a given webpage.
 
 Instructions:
     1. Scrape the webpage:
@@ -29,7 +33,7 @@ Instructions:
         - You need to call `register_poi` function for each POI found on the webpage. Do not call the function with list of all POIs at once.
             - Correct example: `register_poi({"name": "POI1", "location": "City", "category": "Park", "description": "Description"})`
             - Incorrect example: `register_poi([{"name": "POI1", "location": "City", "category": "Park", "description": "Description"}, {"name": "POI2", "location": "City", "category": "Park", "description": "Description"}])`
-        - If you find any new urls on the webpage, you MUST call the `register_url` function to record the url along with the score (1 - 5) indicating the relevance of the link to the POIs.
+        - If you find any new urls that point to the English version of the webpage, you MUST call the `register_url` function to record the url along with the score (1 - 5) indicating the relevance of the link to the POIs.
 
     2. Collect POIs:
 
@@ -40,16 +44,14 @@ Instructions:
             - Category: The type of POI (e.g., Beach, Park, Museum).
             - Description: A short summary of the POI.
 
-    3. Identify URLs:
-
-        - List all URLs found on the page.
-        - Assign a relevance score (1-5) to each URL:
-            - 5: Very likely to lead to more POIs (e.g., “places,” “activities,” “landmarks”).
-            - 1: Unlikely to lead to POIs (e.g., “contact-us,” “terms-and-conditions”).
+    3. Collect URLs:"""
+        + URL_IDENTIFICATION_INSTRUCTION_MSG
+        + """
 
 Termination:
     - Once you have collected all the POIs and URLs from the webpage, you can terminate the chat by sending only "TERMINATE" as the message.
 """
+    )
 
     def _is_termination_msg(self, msg: Dict[str, Any]) -> bool:
         """Check if the message is a termination message."""
