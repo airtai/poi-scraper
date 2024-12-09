@@ -24,6 +24,14 @@ URL_IDENTIFICATION_INSTRUCTION_MSG = """
 
         Note: Only consider language codes in paths and query parameters. Ignore language indications in domains or subdomains.
 
+    - If the URL is pointing to an image or video file, exclude it from the list. Never include URLs ending with .jpg, .jpeg, .png, .gif, .webp, or .mp4. Example URLs to exclude:
+        - https://www.example.com/beaches/photo.jpg
+        - https://www.example.com/places/photo.jpeg
+        - https://www.example.com/beaches/beach_1/photo.png
+        - https://www.example.com/some-page/photo.gif
+        - https://www.example.com/some-other-page/photo.webp
+        - https://www.example.com/places/video.mp4
+
     - For each collected URL on the page, assign a relevance score (1-5):
         - 5: Highly likely to lead to more POIs (e.g., "places," "activities," "landmarks").
         - 1: Unlikely to lead to POIs (e.g., "contact-us," "privacy-policy").

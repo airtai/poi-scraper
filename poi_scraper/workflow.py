@@ -14,6 +14,7 @@ from poi_scraper.utils import (
     generated_formatted_scores,
     get_all_pois,
     get_all_tasks,
+    get_max_links_to_scrape,
     start_or_resume_task,
 )
 
@@ -36,6 +37,7 @@ DB_PATH = Path("poi_data.db")
 @wf.register(name="poi_scraper", description="Scrape new POIs")  # type: ignore[misc]
 def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
     task_name, base_url = start_or_resume_task(ui, DB_PATH)
+    max_links_to_scrape = get_max_links_to_scrape(ui)
 
     # Initialize POI manager
     poi_validator = ValidatePoiAgent(llm_config=llm_config)
@@ -50,13 +52,15 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
     scraper = Scraper(llm_config)
 
     # Process
-    pois, site = poi_manager.process(scraper=scraper, max_links_to_scrape=2)
+    pois, site = poi_manager.process(
+        scraper=scraper, max_links_to_scrape=max_links_to_scrape
+    )
 
     table = generate_poi_markdown_table(pois)
     ui.text_message(
         sender="Workflow",
         recipient="User",
-        body=f"List of all registered POIs:\n{table}",
+        body=f"Complete list of all registered POIs (including all sessions):\n{table}",
     )
 
     scores = site.get_url_scores(decimals=3)
@@ -64,10 +68,14 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
     ui.text_message(
         sender="Workflow",
         recipient="User",
-        body=f"List of all discovered links:\n{formatted_scores}",
+        body=f"Complete list of all discovered links (including all sessions):\n{formatted_scores}",
     )
 
-    return f"POI collection completed for {base_url}."
+    task_completion_msg = f"POI collection completed for {base_url}. Please click on the pencil icon on the top left corner and select 'Scrape new POIs' to scrape more POIs or 'Show scraped POIs' to view the collected POIs."
+
+    ui.text_message(sender="Workflow", recipient="User", body=task_completion_msg)
+
+    return task_completion_msg
 
 
 @wf.register(name="show_poi", description="Show scraped POIs")  # type: ignore[misc]
