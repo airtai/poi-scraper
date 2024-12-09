@@ -65,7 +65,7 @@ def get_base_url(ui: UI) -> str:
 
 def is_unique_name(name: str, db_path: Path) -> bool:
     try:
-        statement = "SELECT COUNT(*) FROM workflows WHERE name = ?"
+        statement = "SELECT COUNT(*) FROM tasks WHERE name = ?"
         with get_connection(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(statement, (name,))
@@ -74,7 +74,7 @@ def is_unique_name(name: str, db_path: Path) -> bool:
         return True
 
 
-def get_name_for_workflow(ui: UI, db_path: Path) -> str:
+def get_name_for_task(ui: UI, db_path: Path) -> str:
     while True:
         name: str = ui.text_input(
             sender="Workflow",
@@ -98,13 +98,13 @@ def get_name_for_workflow(ui: UI, db_path: Path) -> str:
     return name
 
 
-def get_all_workflows(db_path: Path, in_progress: bool = False) -> List[Dict[str, Any]]:
-    """Get all workflows from the database."""
+def get_all_tasks(db_path: Path, in_progress: bool = False) -> List[Dict[str, Any]]:
+    """Get all tasks from the database."""
     try:
         statement = (
-            "SELECT * FROM workflows WHERE status != 'completed'"
+            "SELECT * FROM tasks WHERE status != 'completed'"
             if in_progress
-            else "SELECT * FROM workflows"
+            else "SELECT * FROM tasks"
         )
         with get_connection(db_path) as conn:
             cursor = conn.cursor()
@@ -114,11 +114,11 @@ def get_all_workflows(db_path: Path, in_progress: bool = False) -> List[Dict[str
         return []
 
 
-def start_or_resume_workflow(ui: UI, db_path: Path) -> Tuple[str, str]:
-    # Check if there are any incomplete workflows
-    inprogress_workflows = get_all_workflows(db_path=db_path, in_progress=True)
+def start_or_resume_task(ui: UI, db_path: Path) -> Tuple[str, str]:
+    # Check if there are any incomplete tasks
+    inprogress_tasks = get_all_tasks(db_path=db_path, in_progress=True)
 
-    if inprogress_workflows:
+    if inprogress_tasks:
         answer = ui.multiple_choice(
             sender="Workflow",
             recipient="User",
@@ -127,31 +127,29 @@ def start_or_resume_workflow(ui: UI, db_path: Path) -> Tuple[str, str]:
             single=True,
         )
         if answer == "Yes":
-            incomplete_workflow_names = [
-                workflow["name"] for workflow in inprogress_workflows
-            ]
-            selected_workflow = ui.multiple_choice(
+            incomplete_task_names = [task["name"] for task in inprogress_tasks]
+            selected_task = ui.multiple_choice(
                 sender="Workflow",
                 recipient="User",
                 prompt="Which scraping tasks do you want to resume?",
-                choices=incomplete_workflow_names,
+                choices=incomplete_task_names,
                 single=True,
             )
             ui.text_message(
                 sender="Workflow",
                 recipient="User",
-                body=f"Resuming scraping task for {selected_workflow}.",
+                body=f"Resuming scraping task for {selected_task}.",
             )
-            # get the url for the selected_workflow from incomplete_workflows
-            selected_workflow_base_url = next(
-                workflow["base_url"]
-                for workflow in inprogress_workflows
-                if workflow["name"] == selected_workflow
+            # get the url for the selected_task from incomplete_tasks
+            selected_task_base_url = next(
+                task["base_url"]
+                for task in inprogress_tasks
+                if task["name"] == selected_task
             )
-            return selected_workflow, selected_workflow_base_url
+            return selected_task, selected_task_base_url
 
     # Get valid URL from user
-    name = get_name_for_workflow(ui, db_path)
+    name = get_name_for_task(ui, db_path)
     base_url = get_base_url(ui)
     # base_url = "https://www.infofazana.hr/en"
     # base_url = "www.medulinriviera.info"
@@ -165,11 +163,11 @@ def start_or_resume_workflow(ui: UI, db_path: Path) -> Tuple[str, str]:
     return name, base_url
 
 
-def get_all_pois(workflow_id: int, db_path: Path) -> List[Dict[str, str]]:
-    statement = "SELECT * FROM pois WHERE workflow_id = ?"
+def get_all_pois(task_id: int, db_path: Path) -> List[Dict[str, str]]:
+    statement = "SELECT * FROM pois WHERE task_id = ?"
     with get_connection(db_path) as conn:
         cursor = conn.cursor()
-        cursor.execute(statement, (workflow_id,))
+        cursor.execute(statement, (task_id,))
         pois = cursor.fetchall()
 
     return [

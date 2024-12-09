@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 from fastagency.logging import get_logger
 
-from poi_scraper.database import PoiDatabase, WorkflowStatistics
+from poi_scraper.database import PoiDatabase, ScrapingStatistics
 from poi_scraper.poi_types import PoiData, PoiManagerProtocol, ValidatePoiAgentProtocol
 from poi_scraper.scraper import Scraper
 from poi_scraper.statistics import Link, Site
@@ -18,7 +18,7 @@ class PoiManager(PoiManagerProtocol):
         self,
         base_url: str,
         poi_validator: ValidatePoiAgentProtocol,
-        workflow_name: str,
+        task_name: str,
         db_path: Path,
     ):
         """Initialize the POIManager with a base URL.
@@ -30,7 +30,7 @@ class PoiManager(PoiManagerProtocol):
         Args:
             base_url (str): The base URL to start managing points of interest from.
             poi_validator (ValidatePoiAgentProtocol): The agent to validate points of interest.
-            workflow_name (str): The name of the workflow.
+            task_name (str): The name of the task.
             db_path (Path): The path to the database file.
         """
         self.base_url = base_url
@@ -40,10 +40,8 @@ class PoiManager(PoiManagerProtocol):
         self.current_url = ""
         self._urls_with_scores: Dict[str, List[Tuple[str, Literal[1, 2, 3, 4, 5]]]] = {}
 
-        # Initialize or resume workflow with all state
-        self.workflow_id, site_obj = self.db.create_or_get_workflow(
-            workflow_name, base_url
-        )
+        # Initialize or resume task with all state
+        self.task_id, site_obj = self.db.create_or_get_task(task_name, base_url)
 
         if site_obj:
             self.homepage = site_obj.site_obj.urls[base_url]
@@ -52,10 +50,10 @@ class PoiManager(PoiManagerProtocol):
             self._save_state_in_db()
 
     def _save_state_in_db(self) -> None:
-        # Save new workflow state in the database
-        self.db.save_workflow_state(
-            self.workflow_id,
-            WorkflowStatistics(
+        # Save new task state in the database
+        self.db.save_task_state(
+            self.task_id,
+            ScrapingStatistics(
                 site_obj=self.homepage.site,
             ),
         )
@@ -70,11 +68,11 @@ class PoiManager(PoiManagerProtocol):
             return f"POI validation failed for: {poi.name, poi.description}"
 
         # Check if POI already exists
-        if self.db.is_poi_deplicate(self.workflow_id, poi):
+        if self.db.is_poi_duplicate(self.task_id, poi):
             return f"POI already exists: {poi.name}"
 
         # Add POI to the database
-        self.db.add_poi(self.workflow_id, self.current_url, poi)
+        self.db.add_poi(self.task_id, self.current_url, poi)
 
         return f"POI registered: {poi.name}, Category: {poi.category}, Location: {poi.location}"
 
@@ -113,7 +111,7 @@ class PoiManager(PoiManagerProtocol):
 
             # Record the visit
             pois_found = bool(
-                self.db.get_all_pois(self.workflow_id).get(self.current_url, [])
+                self.db.get_all_pois(self.task_id).get(self.current_url, [])
             )
             current_link.record_visit(
                 poi_found=pois_found,
@@ -126,6 +124,6 @@ class PoiManager(PoiManagerProtocol):
             # Get next batch of unvisited links
             unvisited_links = site.get_sorted_unvisited_links(min_score)
 
-        # All URLs processed, mark workflow as complete
-        self.db.mark_workflow_completed(self.workflow_id)
-        return self.db.get_all_pois(self.workflow_id), site
+        # All URLs processed, mark task as complete
+        self.db.mark_task_completed(self.task_id)
+        return self.db.get_all_pois(self.task_id), site
