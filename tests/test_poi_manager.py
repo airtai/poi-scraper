@@ -119,9 +119,7 @@ class TestPoiManager(TestCase):
             assert task["status"] == expected_status
             assert task["name"] == self.task_name
             assert task["base_url"] == self.base_url
-
-            if expected_status == "completed":
-                assert task["site_obj"] is None
+            assert task["site_obj"] is not None
 
     def verify_pois(
         self, task_id: int, expected_pois: Dict[str, List[PoiData]]
@@ -199,11 +197,13 @@ class TestPoiManager(TestCase):
 
         expected_pois_resume = {
             self.base_url: [
-                PoiData("Beach POI", "Beach Description", "Beach", "Location 2"),
                 PoiData("name_1", "Description 1", "Category 1", "Location 1"),
                 PoiData("name_2", "Description 2", "Category 2", "Location 2"),
                 PoiData("name_3", "Description 3", "Category 3", "Location 3"),
-            ]
+            ],
+            "https://www.example.com/4": [
+                PoiData("Beach POI", "Beach Description", "Beach", "Location 2")
+            ],
         }
 
         self.verify_pois(resumed_manager.task_id, expected_pois_resume)

@@ -21,7 +21,7 @@ class Site:
                     "estimated_score": link.estimated_score,
                     "parent_urls": [parent.url for parent in link.parents]
                     if link.parents
-                    else None,
+                    else [],
                     "visited": link.visited,
                     "children_urls": [child.url for child in link.children],
                     "children_visited": link.children_visited,
@@ -64,7 +64,7 @@ class Site:
             current_link.parents = (
                 {self.urls[parent_url] for parent_url in link_data["parent_urls"]}  # type: ignore
                 if link_data["parent_urls"]
-                else None
+                else set()
             )
 
             # Add children Links

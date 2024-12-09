@@ -33,7 +33,7 @@ wf = AutoGenWorkflows()
 DB_PATH = Path("poi_data.db")
 
 
-@wf.register(name="poi_scraper", description="POI scraper chat")  # type: ignore[misc]
+@wf.register(name="poi_scraper", description="Scrape new POIs")  # type: ignore[misc]
 def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
     task_name, base_url = start_or_resume_task(ui, DB_PATH)
 
@@ -64,13 +64,13 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
     ui.text_message(
         sender="Workflow",
         recipient="User",
-        body=f"List of all new links:\n{formatted_scores}",
+        body=f"List of all discovered links:\n{formatted_scores}",
     )
 
     return f"POI collection completed for {base_url}."
 
 
-@wf.register(name="show_poi", description="Show scraped POI's")  # type: ignore[misc]
+@wf.register(name="show_poi", description="Show scraped POIs")  # type: ignore[misc]
 def show_poi_task(ui: UI, params: dict[str, Any]) -> str:
     all_tasks = get_all_tasks(db_path=DB_PATH)
 
@@ -87,7 +87,7 @@ def show_poi_task(ui: UI, params: dict[str, Any]) -> str:
     selected_task = ui.multiple_choice(
         sender="Workflow",
         recipient="User",
-        prompt="Click on the task to show the POI's",
+        prompt="Click on a task to view its POIs",
         choices=task_names,
         single=True,
     )

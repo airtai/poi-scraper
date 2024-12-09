@@ -157,7 +157,7 @@ class PoiDatabase:
         """Mark task as completed and clear queue state."""
         with get_connection(self.db_path) as conn:
             conn.execute(
-                """UPDATE tasks SET status = 'completed', site_obj = NULL WHERE id = ?""",
+                """UPDATE tasks SET status = 'completed' WHERE id = ?""",
                 (task_id,),
             )
             conn.commit()
