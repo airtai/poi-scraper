@@ -49,7 +49,7 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
     scraper = Scraper(llm_config)
 
     # Process
-    pois, site = poi_manager.process(scraper, 5)
+    pois, site = poi_manager.process(scraper=scraper, max_links_to_scrape=2)
 
     table = generate_poi_markdown_table(pois)
     ui.text_message(

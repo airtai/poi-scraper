@@ -5,8 +5,11 @@ from typing import Any, Dict, Iterator, List, Literal, Tuple
 from urllib.parse import urlparse
 
 from fastagency import UI
+from fastagency.logging import get_logger
 
 from poi_scraper.poi_types import PoiData
+
+logger = get_logger(__name__)
 
 
 @contextmanager
@@ -98,61 +101,54 @@ def get_name_for_task(ui: UI, db_path: Path) -> str:
     return name
 
 
-def get_all_tasks(db_path: Path, in_progress: bool = False) -> List[Dict[str, Any]]:
+def get_all_tasks(db_path: Path) -> List[Dict[str, Any]]:
     """Get all tasks from the database."""
     try:
-        statement = (
-            "SELECT * FROM tasks WHERE status != 'completed'"
-            if in_progress
-            else "SELECT * FROM tasks"
-        )
+        statement = "SELECT * FROM tasks"
         with get_connection(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(statement)
             return [dict(row) for row in cursor.fetchall()]
-    except sqlite3.OperationalError:
+    except sqlite3.OperationalError as e:
+        logger.info(f"Error in get_all_tasks: {e!s}")
         return []
 
 
 def start_or_resume_task(ui: UI, db_path: Path) -> Tuple[str, str]:
     # Check if there are any incomplete tasks
-    inprogress_tasks = get_all_tasks(db_path=db_path, in_progress=True)
+    all_tasks = get_all_tasks(db_path=db_path)
 
-    if inprogress_tasks:
+    if all_tasks:
         answer = ui.multiple_choice(
             sender="Workflow",
             recipient="User",
-            prompt="Incomplete scraping tasks found. Do you want to resume any of them?",
+            prompt="Would you like to restart any of the previous scraping tasks?",
             choices=["Yes", "No"],
             single=True,
         )
         if answer == "Yes":
-            incomplete_task_names = [task["name"] for task in inprogress_tasks]
+            previous_task_names = [task["name"] for task in all_tasks]
             selected_task = ui.multiple_choice(
                 sender="Workflow",
                 recipient="User",
-                prompt="Which scraping tasks do you want to resume?",
-                choices=incomplete_task_names,
+                prompt="Which scraping tasks do you want to restart?",
+                choices=previous_task_names,
                 single=True,
             )
             ui.text_message(
                 sender="Workflow",
                 recipient="User",
-                body=f"Resuming scraping task for {selected_task}.",
+                body=f"Restarting scraping task for {selected_task}.",
             )
             # get the url for the selected_task from incomplete_tasks
             selected_task_base_url = next(
-                task["base_url"]
-                for task in inprogress_tasks
-                if task["name"] == selected_task
+                task["base_url"] for task in all_tasks if task["name"] == selected_task
             )
             return selected_task, selected_task_base_url
 
     # Get valid URL from user
     name = get_name_for_task(ui, db_path)
     base_url = get_base_url(ui)
-    # base_url = "https://www.infofazana.hr/en"
-    # base_url = "www.medulinriviera.info"
 
     ui.text_message(
         sender="Workflow",

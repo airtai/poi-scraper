@@ -81,7 +81,7 @@ class PoiDatabase:
             # Create new task if it doesn't exist
             cursor = conn.execute(
                 """INSERT INTO tasks (
-                        name,base_url, status, site_obj
+                        name, base_url, status, site_obj
                     ) VALUES (?, ?, ?, ?)""",
                 (name, base_url, "in_progress", None),
             )
