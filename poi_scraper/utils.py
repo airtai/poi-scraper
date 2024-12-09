@@ -37,12 +37,23 @@ def is_valid_url(url: str) -> bool:
 def generate_poi_markdown_table(
     pois: dict[str, list[PoiData]],
 ) -> str:
-    table_header = "| Sno | URL | Name | Category | Location | Description |\n| --- | --- | --- | --- | --- | --- |\n"
+    all_pois = [poi for url, poi_list in pois.items() for poi in poi_list]
+    table_header = "| Sno | Name | Category | Location | Description |\n| --- | --- | --- | --- | --- |\n"
     table_rows = "\n".join(
         [
-            f"| {i+1} | {url} | {poi.name} | {poi.category} | {poi.location} | {poi.description} |"
-            for i, (url, poi_list) in enumerate(pois.items())
-            for poi in poi_list
+            f"| {i+1} | {poi.name} | {poi.category} | {poi.location} | {poi.description} |"
+            for i, poi in enumerate(all_pois)
+        ]
+    )
+    return table_header + table_rows
+
+
+def generated_formatted_scores(scores: Dict[str, float]) -> str:
+    table_header = "| Sno | Url | Score |\n| --- | --- | --- |\n"
+    table_rows = "\n".join(
+        [
+            f"| {i+1} | {url} | {score} |"
+            for i, (url, score) in enumerate(scores.items())
         ]
     )
     return table_header + table_rows

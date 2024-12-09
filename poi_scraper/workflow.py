@@ -11,6 +11,7 @@ from poi_scraper.poi_manager import PoiManager
 from poi_scraper.scraper import Scraper
 from poi_scraper.utils import (
     generate_poi_markdown_table,
+    generated_formatted_scores,
     get_all_pois,
     get_all_tasks,
     start_or_resume_task,
@@ -58,10 +59,12 @@ def websurfer_workflow(ui: UI, params: dict[str, Any]) -> str:
         body=f"List of all registered POIs:\n{table}",
     )
 
+    scores = site.get_url_scores(decimals=3)
+    formatted_scores = generated_formatted_scores(scores)
     ui.text_message(
         sender="Workflow",
         recipient="User",
-        body=f"List of all new links:\n{site.get_url_scores(decimals=3)}",
+        body=f"List of all new links:\n{formatted_scores}",
     )
 
     return f"POI collection completed for {base_url}."
