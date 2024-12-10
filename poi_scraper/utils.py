@@ -206,24 +206,24 @@ def get_max_links_to_scrape(ui: UI) -> int:
         max_links_to_scrape: int = ui.text_input(
             sender="Workflow",
             recipient="User",
-            prompt="Please enter a number between 1 and 50 to set the maximum number of links to scrape from the website in a single session. You can restart the task anytime to scrape additional links.",
+            prompt="Please enter a number between 1 and 20 (inclusive) to set the maximum number of links to scrape from the website in a single session. You can restart the task anytime to scrape additional links.",
         )
 
         try:
             max_links_to_scrape = int(max_links_to_scrape)
-            if 1 <= max_links_to_scrape <= 50:
+            if 1 <= max_links_to_scrape <= 20:
                 break
             else:
                 ui.text_message(
                     sender="Workflow",
                     recipient="User",
-                    body="Please enter a number between 1 and 50.",
+                    body="Please enter a number between 1 and 20.",
                 )
         except ValueError:
             ui.text_message(
                 sender="Workflow",
                 recipient="User",
-                body="The value you entered is not a valid number. Please enter a number between 1 and 50.",
+                body="The value you entered is not a valid number. Please enter a number between 1 and 20.",
             )
             continue
     return max_links_to_scrape
