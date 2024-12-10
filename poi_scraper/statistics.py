@@ -19,7 +19,9 @@ class Site:
                 url: {
                     "url": link.url,
                     "estimated_score": link.estimated_score,
-                    "parent_urls": [parent.url for parent in link.parents],
+                    "parent_urls": [parent.url for parent in link.parents]
+                    if link.parents
+                    else [],
                     "visited": link.visited,
                     "children_urls": [child.url for child in link.children],
                     "children_visited": link.children_visited,
@@ -62,7 +64,7 @@ class Site:
             current_link.parents = (
                 {self.urls[parent_url] for parent_url in link_data["parent_urls"]}  # type: ignore
                 if link_data["parent_urls"]
-                else None
+                else set()
             )
 
             # Add children Links
@@ -80,12 +82,12 @@ class Site:
         return {url: round(link.score, decimals) for url, link in self.urls.items()}
 
     def get_sorted_unvisited_links(
-        self, min_score: Optional[int] = None
+        self, min_scraping_score: Optional[int] = None
     ) -> List["Link"]:
         """Get unvisited links from the site, sorted by score in descending order.
 
         Args:
-            min_score (Optional[int]): The minimum score required for the link.
+            min_scraping_score (Optional[int]): The minimum score required for the link.
 
         Returns:
             List[Link]: The unvisited links from the site, sorted by score in descending order.
@@ -98,7 +100,8 @@ class Site:
         unvisited = [
             link
             for link in all_links
-            if not link.visited and (min_score is None or link.score >= min_score)
+            if not link.visited
+            and (min_scraping_score is None or link.score >= min_scraping_score)
         ]
 
         # Sort the unvisited links by score in descending order
@@ -156,7 +159,8 @@ class Link:
         if parent and url in parent.site.urls:
             site = parent.site
             link = parent.site.urls[url]
-            link.parents.add(parent)
+            if link.parents:
+                link.parents.add(parent)
         else:
             site = Site(urls={}) if parent is None else parent.site
             parents = {parent} if parent else set()

@@ -5,8 +5,11 @@ from typing import Any, Dict, Iterator, List, Literal, Tuple
 from urllib.parse import urlparse
 
 from fastagency import UI
+from fastagency.logging import get_logger
 
 from poi_scraper.poi_types import PoiData
+
+logger = get_logger(__name__)
 
 
 @contextmanager
@@ -34,12 +37,23 @@ def is_valid_url(url: str) -> bool:
 def generate_poi_markdown_table(
     pois: dict[str, list[PoiData]],
 ) -> str:
-    table_header = "| Sno | URL | Name | Category | Location | Description |\n| --- | --- | --- | --- | --- | --- |\n"
+    all_pois = [poi for url, poi_list in pois.items() for poi in poi_list]
+    table_header = "| Sno | Name | Category | Location | Description |\n| --- | --- | --- | --- | --- |\n"
     table_rows = "\n".join(
         [
-            f"| {i+1} | {url} | {poi.name} | {poi.category} | {poi.location} | {poi.description} |"
-            for i, (url, poi_list) in enumerate(pois.items())
-            for poi in poi_list
+            f"| {i+1} | {poi.name} | {poi.category} | {poi.location} | {poi.description} |"
+            for i, poi in enumerate(all_pois)
+        ]
+    )
+    return table_header + table_rows
+
+
+def generated_formatted_scores(scores: Dict[str, float]) -> str:
+    table_header = "| Sno | Url | Score |\n| --- | --- | --- |\n"
+    table_rows = "\n".join(
+        [
+            f"| {i+1} | {url} | {score} |"
+            for i, (url, score) in enumerate(scores.items())
         ]
     )
     return table_header + table_rows
@@ -98,61 +112,54 @@ def get_name_for_task(ui: UI, db_path: Path) -> str:
     return name
 
 
-def get_all_tasks(db_path: Path, in_progress: bool = False) -> List[Dict[str, Any]]:
+def get_all_tasks(db_path: Path) -> List[Dict[str, Any]]:
     """Get all tasks from the database."""
     try:
-        statement = (
-            "SELECT * FROM tasks WHERE status != 'completed'"
-            if in_progress
-            else "SELECT * FROM tasks"
-        )
+        statement = "SELECT * FROM tasks"
         with get_connection(db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(statement)
             return [dict(row) for row in cursor.fetchall()]
-    except sqlite3.OperationalError:
+    except sqlite3.OperationalError as e:
+        logger.info(f"Error in get_all_tasks: {e!s}")
         return []
 
 
 def start_or_resume_task(ui: UI, db_path: Path) -> Tuple[str, str]:
     # Check if there are any incomplete tasks
-    inprogress_tasks = get_all_tasks(db_path=db_path, in_progress=True)
+    all_tasks = get_all_tasks(db_path=db_path)
 
-    if inprogress_tasks:
+    if all_tasks:
         answer = ui.multiple_choice(
             sender="Workflow",
             recipient="User",
-            prompt="Incomplete scraping tasks found. Do you want to resume any of them?",
+            prompt="Would you like to restart any of the previous scraping tasks?",
             choices=["Yes", "No"],
             single=True,
         )
         if answer == "Yes":
-            incomplete_task_names = [task["name"] for task in inprogress_tasks]
+            previous_task_names = [task["name"] for task in all_tasks]
             selected_task = ui.multiple_choice(
                 sender="Workflow",
                 recipient="User",
-                prompt="Which scraping tasks do you want to resume?",
-                choices=incomplete_task_names,
+                prompt="Which scraping tasks do you want to restart?",
+                choices=previous_task_names,
                 single=True,
             )
             ui.text_message(
                 sender="Workflow",
                 recipient="User",
-                body=f"Resuming scraping task for {selected_task}.",
+                body=f"Restarting scraping task for {selected_task}.",
             )
             # get the url for the selected_task from incomplete_tasks
             selected_task_base_url = next(
-                task["base_url"]
-                for task in inprogress_tasks
-                if task["name"] == selected_task
+                task["base_url"] for task in all_tasks if task["name"] == selected_task
             )
             return selected_task, selected_task_base_url
 
     # Get valid URL from user
     name = get_name_for_task(ui, db_path)
     base_url = get_base_url(ui)
-    # base_url = "https://www.infofazana.hr/en"
-    # base_url = "www.medulinriviera.info"
 
     ui.text_message(
         sender="Workflow",
@@ -192,3 +199,31 @@ def filter_same_domain_urls(
         for url, score in urls_found
         if urlparse(url).netloc == base_domain_netloc
     }
+
+
+def get_max_links_to_scrape(ui: UI) -> int:
+    while True:
+        max_links_to_scrape: int = ui.text_input(
+            sender="Workflow",
+            recipient="User",
+            prompt="Please enter a number between 1 and 20 (inclusive) to set the maximum number of links to scrape from the website in a single session. You can restart the task anytime to scrape additional links.",
+        )
+
+        try:
+            max_links_to_scrape = int(max_links_to_scrape)
+            if 1 <= max_links_to_scrape <= 20:
+                break
+            else:
+                ui.text_message(
+                    sender="Workflow",
+                    recipient="User",
+                    body="Please enter a number between 1 and 20.",
+                )
+        except ValueError:
+            ui.text_message(
+                sender="Workflow",
+                recipient="User",
+                body="The value you entered is not a valid number. Please enter a number between 1 and 20.",
+            )
+            continue
+    return max_links_to_scrape

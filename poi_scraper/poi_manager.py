@@ -82,7 +82,11 @@ class PoiManager(PoiManagerProtocol):
         return f"Link registered: {url}, AI score: {score}"
 
     def process(
-        self, scraper: Scraper, min_score: Optional[int] = None
+        self,
+        *,
+        scraper: Scraper,
+        max_links_to_scrape: int = 50,
+        min_scraping_score: Optional[int] = None,
     ) -> Tuple[Dict[str, List[PoiData]], Site]:
         # Create scraper function
         scrape = scraper.create(self)
@@ -91,9 +95,17 @@ class PoiManager(PoiManagerProtocol):
         site = self.homepage.site
 
         # Initialize unvisited links, defaulting to homepage if none exist
-        unvisited_links = site.get_sorted_unvisited_links(min_score) or [self.homepage]
+        unvisited_links = site.get_sorted_unvisited_links(min_scraping_score) or [
+            self.homepage
+        ]
 
-        while unvisited_links:
+        # Set initial value for urls_scraped counter
+        urls_scraped = 0
+
+        while unvisited_links and urls_scraped < max_links_to_scrape:
+            # Increment the counter
+            urls_scraped += 1
+
             # Process the highest scoring link first
             current_link = unvisited_links[0]
             self.current_url = current_link.url
@@ -122,7 +134,7 @@ class PoiManager(PoiManagerProtocol):
             self._save_state_in_db()
 
             # Get next batch of unvisited links
-            unvisited_links = site.get_sorted_unvisited_links(min_score)
+            unvisited_links = site.get_sorted_unvisited_links(min_scraping_score)
 
         # All URLs processed, mark task as complete
         self.db.mark_task_completed(self.task_id)
